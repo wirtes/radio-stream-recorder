@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  audio-stream-recorder:
+    build: .
+    container_name: audio-stream-recorder
+    ports:
+      - "8666:8666"
+    volumes:
+      # Persistent data storage
+      - ./data:/app/data
+      - ./recordings:/app/recordings
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./artwork:/app/artwork
+    environment:
+      - WEB_PORT=8666
+      - WEB_HOST=0.0.0.0
+      - LOG_LEVEL=INFO
+      - MAX_CONCURRENT_RECORDINGS=3
+      - CLEANUP_AFTER_TRANSFER=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8666/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
