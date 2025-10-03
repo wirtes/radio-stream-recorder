@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+
+{% block title %}
+{% if mode == 'create' %}
+Add New Stream - Audio Stream Recorder
+{% else %}
+Edit Stream - Audio Stream Recorder
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        {% if mode == 'create' %}
+        Add New Stream Configuration
+        {% else %}
+        Edit Stream Configuration
+        {% endif %}
+    </h1>
+    <a href="{{ url_for('main.streams') }}" class="btn btn-secondary">Back to Streams</a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Stream Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form id="stream-form">
+                    <div class="form-group">
+                        <label for="name" class="form-label">Stream Name *</label>
+                        <input type="text" id="name" name="name" class="form-control" required>
+                        <div class="invalid-feedback"></div>
+                        <small class="form-text text-muted">A descriptive name for this stream configuration.</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="stream_url" class="form-label">Stream URL *</label>
+                        <div class="input-group">
+                            <input type="url" id="stream_url" name="stream_url" class="form-control" required>
+                            <button type="button" id="test-url-btn" class="btn btn-outline-primary">Test</button>
+                        </div>
+                        <div class="invalid-feedback"></div>
+                        <small class="form-text text-muted">The URL of the audio stream to record.</small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="artist" class="form-label">Artist *</label>
+                                <input type="text" id="artist" name="artist" class="form-control" required>
+                                <div class="invalid-feedback"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="album_artist" class="form-label">Album Artist *</label>
+                                <input type="text" id="album_artist" name="album_artist" class="form-control" required>
+                                <div class="invalid-feedback"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="album" class="form-label">Album *</label>
+                        <input type="text" id="album" name="album" class="form-control" required>
+                        <div class="invalid-feedback"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="output_filename_pattern" class="form-label">Output Filename Pattern</label>
+                        <input type="text" id="output_filename_pattern" name="output_filename_pattern" 
+                               class="form-control" value="{date}_{name}.mp3">
+                        <div class="invalid-feedback"></div>
+                        <small class="form-text text-muted">
+                            Available placeholders: {date}, {name}, {artist}, {album}
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="scp_destination" class="form-label">SCP Destination *</label>
+                        <input type="text" id="scp_destination" name="scp_destination" class="form-control" required
+                               placeholder="user@hostname:/path/to/destination/">
+                        <div class="invalid-feedback"></div>
+                        <small class="form-text text-muted">
+                            SCP destination in format: user@hostname:/path/to/destination/
+                        </small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="artwork" class="form-label">Artwork</label>
+                        <input type="file" id="artwork" name="artwork" class="form-control" 
+                               accept="image/png,image/jpeg,image/jpg,image/gif,image/bmp,image/webp">
+                        <div class="invalid-feedback"></div>
+                        <small class="form-text text-muted">
+                            Upload artwork image (PNG, JPEG, GIF, BMP, WebP). Max size: 10MB.
+                        </small>
+                    </div>
+                    
+                    <div id="artwork-preview" class="mt-2"></div>
+                    
+                    <div class="form-group mt-4">
+                        <button type="submit" id="submit-btn" class="btn btn-primary">
+                            {% if mode == 'create' %}
+                            Create Stream Configuration
+                            {% else %}
+                            Update Stream Configuration
+                            {% endif %}
+                        </button>
+                        <a href="{{ url_for('main.streams') }}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Help</h5>
+            </div>
+            <div class="card-body">
+                <h6>Stream URL</h6>
+                <p class="small">Enter the direct URL to the audio stream. Supported protocols include HTTP, HTTPS, and RTMP.</p>
+                
+                <h6>Metadata</h6>
+                <p class="small">The artist, album, and album artist fields will be embedded in the MP3 metadata. The title will be auto-generated as "YYYY-MM-DD Show".</p>
+                
+                <h6>Filename Pattern</h6>
+                <p class="small">Use placeholders to customize the output filename:
+                <ul class="small">
+                    <li><code>{date}</code> - Recording date (YYYY-MM-DD)</li>
+                    <li><code>{name}</code> - Stream name</li>
+                    <li><code>{artist}</code> - Artist name</li>
+                    <li><code>{album}</code> - Album name</li>
+                </ul>
+                </p>
+                
+                <h6>SCP Destination</h6>
+                <p class="small">Specify where completed recordings should be transferred. Format: <code>user@hostname:/path/</code></p>
+            </div>
+        </div>
+        
+        {% if mode == 'edit' %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">Current Artwork</h5>
+            </div>
+            <div class="card-body">
+                <div id="current-artwork">
+                    <!-- Current artwork will be loaded here -->
+                </div>
+                <button type="button" id="remove-artwork-btn" class="btn btn-sm btn-danger" style="display: none;">
+                    Remove Current Artwork
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('stream-form');
+    const mode = '{{ mode }}';
+    const streamId = {{ stream_id if mode == 'edit' else 'null' }};
+    
+    // Load existing data if editing
+    if (mode === 'edit' && streamId) {
+        loadStreamData(streamId);
+    }
+    
+    // Form submission
+    form.addEventListener('submit', handleSubmit);
+    
+    // Test URL button
+    document.getElementById('test-url-btn').addEventListener('click', testStreamUrl);
+    
+    // Artwork preview
+    document.getElementById('artwork').addEventListener('change', previewArtwork);
+    
+    // Remove artwork button (edit mode only)
+    const removeArtworkBtn = document.getElementById('remove-artwork-btn');
+    if (removeArtworkBtn) {
+        removeArtworkBtn.addEventListener('click', removeCurrentArtwork);
+    }
+    
+    function loadStreamData(streamId) {
+        fetch(`/api/streams/${streamId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Stream not found');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Populate form fields
+                document.getElementById('name').value = data.name;
+                document.getElementById('stream_url').value = data.stream_url;
+                document.getElementById('artist').value = data.artist;
+                document.getElementById('album').value = data.album;
+                document.getElementById('album_artist').value = data.album_artist;
+                document.getElementById('output_filename_pattern').value = data.output_filename_pattern;
+                document.getElementById('scp_destination').value = data.scp_destination;
+                
+                // Show current artwork if exists
+                if (data.artwork_path) {
+                    showCurrentArtwork(data.artwork_path);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading stream data:', error);
+                AudioRecorder.showAlert('Failed to load stream data', 'danger');
+                window.location.href = '/streams';
+            });
+    }
+    
+    function handleSubmit(event) {
+        event.preventDefault();
+        
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner"></span> Saving...';
+        
+        // Clear previous validation errors
+        clearValidationErrors();
+        
+        const formData = new FormData(form);
+        
+        // Convert FormData to JSON for stream data
+        const streamData = {
+            name: formData.get('name'),
+            stream_url: formData.get('stream_url'),
+            artist: formData.get('artist'),
+            album: formData.get('album'),
+            album_artist: formData.get('album_artist'),
+            output_filename_pattern: formData.get('output_filename_pattern'),
+            scp_destination: formData.get('scp_destination')
+        };
+        
+        const url = mode === 'create' ? '/api/streams' : `/api/streams/${streamId}`;
+        const method = mode === 'create' ? 'POST' : 'PUT';
+        
+        // First, save the stream configuration
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(streamData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => Promise.reject(err));
+            }
+            return response.json();
+        })
+        .then(data => {
+            const savedStreamId = data.id;
+            
+            // If there's an artwork file, upload it
+            const artworkFile = formData.get('artwork');
+            if (artworkFile && artworkFile.size > 0) {
+                return uploadArtwork(savedStreamId, artworkFile);
+            }
+            
+            return data;
+        })
+        .then(data => {
+            AudioRecorder.showAlert(
+                mode === 'create' ? 'Stream configuration created successfully' : 'Stream configuration updated successfully',
+                'success'
+            );
+            window.location.href = '/streams';
+        })
+        .catch(error => {
+            console.error('Error saving stream:', error);
+            
+            if (error.details) {
+                // Handle validation errors
+                showValidationErrors(error.details);
+                AudioRecorder.showAlert('Please correct the validation errors', 'danger');
+            } else {
+                AudioRecorder.showAlert(error.message || 'Failed to save stream configuration', 'danger');
+            }
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = mode === 'create' ? 'Create Stream Configuration' : 'Update Stream Configuration';
+        });
+    }
+    
+    function uploadArtwork(streamId, artworkFile) {
+        const artworkFormData = new FormData();
+        artworkFormData.append('artwork', artworkFile);
+        
+        return fetch(`/api/streams/${streamId}/artwork`, {
+            method: 'POST',
+            body: artworkFormData
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => Promise.reject(err));
+            }
+            return response.json();
+        });
+    }
+    
+    function testStreamUrl() {
+        const urlInput = document.getElementById('stream_url');
+        const testBtn = document.getElementById('test-url-btn');
+        const url = urlInput.value.trim();
+        
+        if (!url) {
+            AudioRecorder.showAlert('Please enter a stream URL first', 'warning');
+            return;
+        }
+        
+        testBtn.disabled = true;
+        testBtn.textContent = 'Testing...';
+        
+        fetch('/api/streams/test-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ stream_url: url })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.connection_test.success) {
+                AudioRecorder.showAlert('Stream URL test successful', 'success');
+                urlInput.classList.remove('is-invalid');
+                urlInput.classList.add('is-valid');
+            } else {
+                AudioRecorder.showAlert(`Stream URL test failed: ${data.connection_test.message}`, 'danger');
+                urlInput.classList.remove('is-valid');
+                urlInput.classList.add('is-invalid');
+            }
+        })
+        .catch(error => {
+            console.error('URL test error:', error);
+            AudioRecorder.showAlert('Failed to test stream URL', 'danger');
+        })
+        .finally(() => {
+            testBtn.disabled = false;
+            testBtn.textContent = 'Test';
+        });
+    }
+    
+    function previewArtwork() {
+        const fileInput = document.getElementById('artwork');
+        const previewContainer = document.getElementById('artwork-preview');
+        
+        if (fileInput.files && fileInput.files[0]) {
+            const file = fileInput.files[0];
+            
+            // Validate file size
+            if (file.size > 10 * 1024 * 1024) { // 10MB
+                AudioRecorder.showAlert('Artwork file is too large. Maximum size is 10MB.', 'danger');
+                fileInput.value = '';
+                previewContainer.innerHTML = '';
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewContainer.innerHTML = `
+                    <div class="artwork-preview">
+                        <img src="${e.target.result}" alt="Artwork Preview" style="max-width: 200px; max-height: 200px; border-radius: 4px;">
+                        <p class="small text-muted mt-1">Preview: ${file.name} (${AudioRecorder.formatFileSize(file.size)})</p>
+                    </div>
+                `;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            previewContainer.innerHTML = '';
+        }
+    }
+    
+    function showCurrentArtwork(artworkPath) {
+        const currentArtworkContainer = document.getElementById('current-artwork');
+        const removeBtn = document.getElementById('remove-artwork-btn');
+        
+        if (artworkPath) {
+            currentArtworkContainer.innerHTML = `
+                <img src="/static/artwork/${artworkPath.split('/').pop()}" alt="Current Artwork" 
+                     style="max-width: 100%; max-height: 200px; border-radius: 4px;"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p style="display: none;" class="text-muted">Artwork file not accessible</p>
+            `;
+            removeBtn.style.display = 'block';
+        } else {
+            currentArtworkContainer.innerHTML = '<p class="text-muted">No artwork uploaded</p>';
+            removeBtn.style.display = 'none';
+        }
+    }
+    
+    function removeCurrentArtwork() {
+        if (!confirm('Are you sure you want to remove the current artwork?')) {
+            return;
+        }
+        
+        fetch(`/api/streams/${streamId}/artwork`, {
+            method: 'DELETE'
+        })
+        .then(response => {
+            if (response.ok) {
+                AudioRecorder.showAlert('Artwork removed successfully', 'success');
+                showCurrentArtwork(null);
+            } else {
+                return response.json().then(err => Promise.reject(err));
+            }
+        })
+        .catch(error => {
+            console.error('Error removing artwork:', error);
+            AudioRecorder.showAlert(error.message || 'Failed to remove artwork', 'danger');
+        });
+    }
+    
+    function showValidationErrors(errors) {
+        errors.forEach(error => {
+            const field = document.getElementById(error.field);
+            if (field) {
+                field.classList.add('is-invalid');
+                const feedback = field.parentElement.querySelector('.invalid-feedback');
+                if (feedback) {
+                    feedback.textContent = error.message;
+                }
+            }
+        });
+    }
+    
+    function clearValidationErrors() {
+        const invalidFields = document.querySelectorAll('.is-invalid');
+        invalidFields.forEach(field => {
+            field.classList.remove('is-invalid');
+        });
+        
+        const feedbacks = document.querySelectorAll('.invalid-feedback');
+        feedbacks.forEach(feedback => {
+            feedback.textContent = '';
+        });
+    }
+});
+</script>
+{% endblock %}

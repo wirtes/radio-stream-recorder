@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Audio Stream Recorder{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Dashboard</h1>
+    <div>
+        <a href="{{ url_for('main.new_stream') }}" class="btn btn-primary">Add Stream</a>
+        <a href="{{ url_for('main.new_schedule') }}" class="btn btn-success">Add Schedule</a>
+    </div>
+</div>
+
+<!-- System Status Card -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">System Status</h5>
+    </div>
+    <div class="card-body">
+        <div id="system-status">
+            <div class="d-flex justify-content-center">
+                <div class="spinner"></div>
+                <span class="ml-2">Loading system status...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 id="total-streams" class="text-primary">-</h3>
+                <p class="mb-0">Total Streams</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 id="active-schedules" class="text-success">-</h3>
+                <p class="mb-0">Active Schedules</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 id="active-recordings" class="text-warning">-</h3>
+                <p class="mb-0">Active Recordings</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h3 id="total-recordings" class="text-info">-</h3>
+                <p class="mb-0">Total Recordings</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Recordings</h5>
+            </div>
+            <div class="card-body">
+                <div id="recent-recordings">
+                    <div class="text-center">
+                        <div class="spinner"></div>
+                        <span class="ml-2">Loading recent recordings...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Upcoming Schedules</h5>
+            </div>
+            <div class="card-body">
+                <div id="upcoming-schedules">
+                    <div class="text-center">
+                        <div class="spinner"></div>
+                        <span class="ml-2">Loading upcoming schedules...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 -0.75rem;
+}
+
+.col-md-3, .col-md-6 {
+    padding: 0 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.col-md-3 {
+    flex: 0 0 25%;
+    max-width: 25%;
+}
+
+.col-md-6 {
+    flex: 0 0 50%;
+    max-width: 50%;
+}
+
+@media (max-width: 768px) {
+    .col-md-3, .col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+.ml-2 {
+    margin-left: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let statusUpdateInterval;
+    
+    function updateDashboard() {
+        // Update system status
+        fetch('/api/system/status')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('system-status').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Status:</strong> <span class="badge badge-${data.status === 'healthy' ? 'success' : 'danger'}">${data.status}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Uptime:</strong> ${AudioRecorder.formatDuration(data.uptime_seconds || 0)}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Disk Usage:</strong> ${(data.disk_usage_percent || 0).toFixed(1)}%
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Memory:</strong> ${(data.memory_usage_percent || 0).toFixed(1)}%
+                        </div>
+                    </div>
+                `;
+                
+                // Update quick stats
+                document.getElementById('active-recordings').textContent = data.active_recordings || 0;
+                document.getElementById('total-recordings').textContent = data.total_recordings || 0;
+            })
+            .catch(error => {
+                document.getElementById('system-status').innerHTML = `
+                    <div class="alert alert-warning">
+                        Unable to load system status. API endpoints not yet implemented.
+                    </div>
+                `;
+            });
+        
+        // Update streams count
+        fetch('/api/streams')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('total-streams').textContent = Array.isArray(data) ? data.length : 0;
+            })
+            .catch(error => {
+                document.getElementById('total-streams').textContent = '?';
+            });
+        
+        // Update schedules count
+        fetch('/api/schedules')
+            .then(response => response.json())
+            .then(data => {
+                const activeCount = Array.isArray(data) ? data.filter(s => s.is_active).length : 0;
+                document.getElementById('active-schedules').textContent = activeCount;
+            })
+            .catch(error => {
+                document.getElementById('active-schedules').textContent = '?';
+            });
+        
+        // Update recent recordings
+        fetch('/api/sessions?limit=5')
+            .then(response => response.json())
+            .then(data => {
+                if (Array.isArray(data) && data.length > 0) {
+                    const html = data.map(session => `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>Session #${session.id}</strong><br>
+                                <small class="text-muted">${new Date(session.start_time).toLocaleString()}</small>
+                            </div>
+                            <span class="badge badge-${getStatusBadgeClass(session.status)}">${session.status}</span>
+                        </div>
+                    `).join('');
+                    document.getElementById('recent-recordings').innerHTML = html;
+                } else {
+                    document.getElementById('recent-recordings').innerHTML = '<p class="text-muted">No recent recordings</p>';
+                }
+            })
+            .catch(error => {
+                document.getElementById('recent-recordings').innerHTML = '<p class="text-warning">Unable to load recent recordings</p>';
+            });
+        
+        // Update upcoming schedules
+        fetch('/api/schedules?active=true&limit=5')
+            .then(response => response.json())
+            .then(data => {
+                if (Array.isArray(data) && data.length > 0) {
+                    const html = data.map(schedule => `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <strong>Schedule #${schedule.id}</strong><br>
+                                <small class="text-muted">Next: ${schedule.next_run_time ? new Date(schedule.next_run_time).toLocaleString() : 'Not scheduled'}</small>
+                            </div>
+                            <span class="badge badge-info">${schedule.duration_minutes}m</span>
+                        </div>
+                    `).join('');
+                    document.getElementById('upcoming-schedules').innerHTML = html;
+                } else {
+                    document.getElementById('upcoming-schedules').innerHTML = '<p class="text-muted">No upcoming schedules</p>';
+                }
+            })
+            .catch(error => {
+                document.getElementById('upcoming-schedules').innerHTML = '<p class="text-warning">Unable to load upcoming schedules</p>';
+            });
+    }
+    
+    function getStatusBadgeClass(status) {
+        switch(status) {
+            case 'completed': return 'success';
+            case 'failed': return 'danger';
+            case 'recording': return 'warning';
+            case 'processing': return 'info';
+            default: return 'secondary';
+        }
+    }
+    
+    // Initial load
+    updateDashboard();
+    
+    // Set up real-time updates
+    statusUpdateInterval = setInterval(updateDashboard, 10000); // Update every 10 seconds
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        if (statusUpdateInterval) {
+            clearInterval(statusUpdateInterval);
+        }
+    });
+});
+</script>
+{% endblock %}

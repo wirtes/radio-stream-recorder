@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}Stream Configurations - Audio Stream Recorder{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Stream Configurations</h1>
+    <div>
+        <a href="{{ url_for('main.new_stream') }}" class="btn btn-primary">Add New Stream</a>
+        <button id="export-streams" class="btn btn-secondary">Export All</button>
+        <button id="import-streams" class="btn btn-secondary">Import</button>
+    </div>
+</div>
+
+<!-- Search and Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label for="search-input" class="form-label">Search Streams</label>
+                    <input type="text" id="search-input" class="form-control" placeholder="Search by name, artist, or album...">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <div>
+                        <button id="search-btn" class="btn btn-primary">Search</button>
+                        <button id="clear-search" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Streams Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Configured Streams</h5>
+    </div>
+    <div class="card-body">
+        <div id="streams-loading" class="text-center">
+            <div class="spinner"></div>
+            <span class="ml-2">Loading streams...</span>
+        </div>
+        
+        <div id="streams-table-container" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Artist</th>
+                            <th>Album</th>
+                            <th>Stream URL</th>
+                            <th>Artwork</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="streams-table-body">
+                        <!-- Streams will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="no-streams" style="display: none;">
+            <div class="text-center">
+                <p class="text-muted">No stream configurations found.</p>
+                <a href="{{ url_for('main.new_stream') }}" class="btn btn-primary">Create Your First Stream</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="import-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5>Import Stream Configurations</h5>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="import-form">
+                <div class="form-group">
+                    <label for="import-file" class="form-label">Select Configuration File</label>
+                    <input type="file" id="import-file" class="form-control" accept=".json">
+                    <small class="form-text text-muted">Upload a JSON file exported from this system.</small>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button id="import-cancel" class="btn btn-secondary">Cancel</button>
+            <button id="import-confirm" class="btn btn-primary">Import</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+
+.modal-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    max-width: 500px;
+    width: 90%;
+}
+
+.modal-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--secondary-color);
+}
+
+.stream-url {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.artwork-indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.artwork-yes {
+    background-color: var(--success-color);
+}
+
+.artwork-no {
+    background-color: var(--secondary-color);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentStreams = [];
+    
+    // Load streams on page load
+    loadStreams();
+    
+    // Search functionality
+    document.getElementById('search-btn').addEventListener('click', performSearch);
+    document.getElementById('clear-search').addEventListener('click', clearSearch);
+    document.getElementById('search-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            performSearch();
+        }
+    });
+    
+    // Export functionality
+    document.getElementById('export-streams').addEventListener('click', exportStreams);
+    
+    // Import functionality
+    document.getElementById('import-streams').addEventListener('click', showImportModal);
+    document.getElementById('import-cancel').addEventListener('click', hideImportModal);
+    document.getElementById('import-confirm').addEventListener('click', importStreams);
+    document.querySelector('.modal-close').addEventListener('click', hideImportModal);
+    
+    function loadStreams(searchQuery = '') {
+        document.getElementById('streams-loading').style.display = 'block';
+        document.getElementById('streams-table-container').style.display = 'none';
+        document.getElementById('no-streams').style.display = 'none';
+        
+        let url = '/api/streams';
+        if (searchQuery) {
+            url += `?search=${encodeURIComponent(searchQuery)}`;
+        }
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                currentStreams = data;
+                displayStreams(data);
+            })
+            .catch(error => {
+                console.error('Error loading streams:', error);
+                AudioRecorder.showAlert('Failed to load streams', 'danger');
+                document.getElementById('streams-loading').style.display = 'none';
+                document.getElementById('no-streams').style.display = 'block';
+            });
+    }
+    
+    function displayStreams(streams) {
+        document.getElementById('streams-loading').style.display = 'none';
+        
+        if (streams.length === 0) {
+            document.getElementById('no-streams').style.display = 'block';
+            document.getElementById('streams-table-container').style.display = 'none';
+            return;
+        }
+        
+        const tbody = document.getElementById('streams-table-body');
+        tbody.innerHTML = '';
+        
+        streams.forEach(stream => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${escapeHtml(stream.name)}</strong></td>
+                <td>${escapeHtml(stream.artist)}</td>
+                <td>${escapeHtml(stream.album)}</td>
+                <td>
+                    <div class="stream-url" title="${escapeHtml(stream.stream_url)}">
+                        ${escapeHtml(stream.stream_url)}
+                    </div>
+                </td>
+                <td>
+                    <div class="artwork-indicator ${stream.artwork_path ? 'artwork-yes' : 'artwork-no'}" 
+                         title="${stream.artwork_path ? 'Has artwork' : 'No artwork'}"></div>
+                </td>
+                <td>${new Date(stream.created_at).toLocaleDateString()}</td>
+                <td>
+                    <div class="btn-group-mobile">
+                        <button class="btn btn-sm btn-primary" onclick="testStream(${stream.id})">Test</button>
+                        <a href="/streams/${stream.id}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                        <button class="btn btn-sm btn-danger" onclick="deleteStream(${stream.id}, '${escapeHtml(stream.name)}')">Delete</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        document.getElementById('streams-table-container').style.display = 'block';
+        document.getElementById('no-streams').style.display = 'none';
+    }
+    
+    function performSearch() {
+        const query = document.getElementById('search-input').value.trim();
+        loadStreams(query);
+    }
+    
+    function clearSearch() {
+        document.getElementById('search-input').value = '';
+        loadStreams();
+    }
+    
+    function exportStreams() {
+        fetch('/api/streams/export')
+            .then(response => response.json())
+            .then(data => {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `stream-configurations-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                AudioRecorder.showAlert('Configuration exported successfully', 'success');
+            })
+            .catch(error => {
+                console.error('Export error:', error);
+                AudioRecorder.showAlert('Failed to export configuration', 'danger');
+            });
+    }
+    
+    function showImportModal() {
+        document.getElementById('import-modal').style.display = 'block';
+    }
+    
+    function hideImportModal() {
+        document.getElementById('import-modal').style.display = 'none';
+        document.getElementById('import-file').value = '';
+    }
+    
+    function importStreams() {
+        const fileInput = document.getElementById('import-file');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            AudioRecorder.showAlert('Please select a file to import', 'warning');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                fetch('/api/streams/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(result => {
+                    hideImportModal();
+                    if (result.errors && result.errors.length > 0) {
+                        AudioRecorder.showAlert(`Import completed with ${result.errors.length} errors. Check console for details.`, 'warning');
+                        console.log('Import errors:', result.errors);
+                    } else {
+                        AudioRecorder.showAlert(`Import successful: ${result.imported_streams} streams imported`, 'success');
+                    }
+                    loadStreams(); // Reload the streams list
+                })
+                .catch(error => {
+                    console.error('Import error:', error);
+                    AudioRecorder.showAlert('Failed to import configuration', 'danger');
+                    hideImportModal();
+                });
+            } catch (error) {
+                AudioRecorder.showAlert('Invalid JSON file', 'danger');
+            }
+        };
+        reader.readAsText(file);
+    }
+    
+    // Global functions for button actions
+    window.testStream = function(streamId) {
+        const button = event.target;
+        button.disabled = true;
+        button.textContent = 'Testing...';
+        
+        fetch(`/api/streams/${streamId}/test`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.connection_test.success) {
+                    AudioRecorder.showAlert('Stream connection test successful', 'success');
+                } else {
+                    AudioRecorder.showAlert(`Stream test failed: ${data.connection_test.message}`, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Test error:', error);
+                AudioRecorder.showAlert('Failed to test stream connection', 'danger');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.textContent = 'Test';
+            });
+    };
+    
+    window.deleteStream = function(streamId, streamName) {
+        if (!confirm(`Are you sure you want to delete the stream "${streamName}"? This action cannot be undone.`)) {
+            return;
+        }
+        
+        fetch(`/api/streams/${streamId}`, { method: 'DELETE' })
+            .then(response => {
+                if (response.ok) {
+                    AudioRecorder.showAlert(`Stream "${streamName}" deleted successfully`, 'success');
+                    loadStreams(); // Reload the streams list
+                } else {
+                    return response.json().then(err => Promise.reject(err));
+                }
+            })
+            .catch(error => {
+                console.error('Delete error:', error);
+                AudioRecorder.showAlert(error.message || 'Failed to delete stream', 'danger');
+            });
+    };
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+});
+</script>
+{% endblock %}

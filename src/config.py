@@ -19,8 +19,16 @@ class Config:
     WEB_HOST: str = os.getenv('WEB_HOST', '0.0.0.0')
     SECRET_KEY: str = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     
+    # Flask Configuration
+    DEBUG: bool = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    TESTING: bool = False
+    WTF_CSRF_ENABLED: bool = True
+    WTF_CSRF_TIME_LIMIT: int = 3600  # 1 hour
+    MAX_CONTENT_LENGTH: int = 16 * 1024 * 1024  # 16MB max file upload
+    
     # Database Configuration
     DATABASE_URL: str = os.getenv('DATABASE_URL', 'sqlite:///data/audio_recorder.db')
+    DATA_DIR: str = os.getenv('DATA_DIR', 'data')
     
     # Logging Configuration
     LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')

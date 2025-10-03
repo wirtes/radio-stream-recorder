@@ -1,0 +1,77 @@
+# Audio Stream Recorder - Docker Compose Configuration
+# Copy this file to docker-compose.yml and customize as needed
+
+version: '3.8'
+
+services:
+  audio-recorder:
+    build: .
+    container_name: audio-stream-recorder
+    
+    # Web interface port mapping
+    ports:
+      - "8666:8666"
+    
+    # Volume mounts for persistent data
+    # Customize these paths according to your setup
+    volumes:
+      # Database and application data (required)
+      - ./data:/app/data
+      
+      # Temporary storage for recordings (required)
+      - ./recordings:/app/recordings
+      
+      # Application logs (required)
+      - ./logs:/app/logs
+      
+      # Uploaded artwork files (required)
+      - ./artwork:/app/artwork
+      
+      # SSH keys and configuration files (required for SCP transfers)
+      - ./config:/app/config
+    
+    # Environment variables
+    # Copy .env.example to .env and customize
+    env_file:
+      - .env
+    
+    # Alternative: Define environment variables directly
+    # environment:
+    #   - WEB_PORT=8666
+    #   - WEB_HOST=0.0.0.0
+    #   - LOG_LEVEL=INFO
+    #   - MAX_CONCURRENT_RECORDINGS=3
+    #   - CLEANUP_AFTER_TRANSFER=true
+    #   - MAX_ARTWORK_SIZE_MB=10
+    #   - DEFAULT_MAX_RETRIES=3
+    #   - RETRY_DELAY_SECONDS=60
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check for container monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8666/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Resource limits (optional)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1G
+    #       cpus: '1.0'
+    #     reservations:
+    #       memory: 512M
+    #       cpus: '0.5'
+
+# Optional: Custom network for isolation
+# networks:
+#   audio-recorder-net:
+#     driver: bridge
+
+# If using custom network, add to service:
+# networks:
+#   - audio-recorder-net

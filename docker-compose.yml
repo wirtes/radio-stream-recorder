@@ -5,20 +5,42 @@ services:
     build: .
     container_name: audio-stream-recorder
     ports:
-      - "8666:8666"
+      - "${WEB_PORT:-8666}:8666"
     volumes:
-      # Persistent data storage
+      # Persistent data storage - using host directories for easy access
       - ./data:/app/data
       - ./recordings:/app/recordings
       - ./config:/app/config
       - ./logs:/app/logs
       - ./artwork:/app/artwork
+      
+      # Alternative: Use named volumes for better Docker integration
+      # - audio_recorder_data:/app/data
+      # - audio_recorder_recordings:/app/recordings
+      # - audio_recorder_config:/app/config
+      # - audio_recorder_logs:/app/logs
+      # - audio_recorder_artwork:/app/artwork
     environment:
+      # Web interface configuration
       - WEB_PORT=8666
-      - WEB_HOST=0.0.0.0
-      - LOG_LEVEL=INFO
-      - MAX_CONCURRENT_RECORDINGS=3
-      - CLEANUP_AFTER_TRANSFER=true
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Recording configuration
+      - MAX_CONCURRENT_RECORDINGS=${MAX_CONCURRENT_RECORDINGS:-3}
+      - CLEANUP_AFTER_TRANSFER=${CLEANUP_AFTER_TRANSFER:-true}
+      
+      # Monitoring configuration
+      - MONITORING_INTERVAL=${MONITORING_INTERVAL:-60}
+      - DISK_WARNING_THRESHOLD=${DISK_WARNING_THRESHOLD:-80.0}
+      - DISK_CRITICAL_THRESHOLD=${DISK_CRITICAL_THRESHOLD:-90.0}
+      - MEMORY_WARNING_THRESHOLD=${MEMORY_WARNING_THRESHOLD:-80.0}
+      - MEMORY_CRITICAL_THRESHOLD=${MEMORY_CRITICAL_THRESHOLD:-90.0}
+      
+      # Database configuration
+      - DATABASE_URL=sqlite:///app/data/audio_recorder.db
+      
+      # Optional timezone configuration
+      - TZ=${TZ:-UTC}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8666/health"]
@@ -26,3 +48,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - audio_recorder_network
+
+# Named volumes (uncomment if using named volumes instead of host directories)
+# volumes:
+#   audio_recorder_data:
+#     driver: local
+#   audio_recorder_recordings:
+#     driver: local
+#   audio_recorder_config:
+#     driver: local
+#   audio_recorder_logs:
+#     driver: local
+#   audio_recorder_artwork:
+#     driver: local
+
+# Network for the application
+networks:
+  audio_recorder_network:
+    driver: bridge

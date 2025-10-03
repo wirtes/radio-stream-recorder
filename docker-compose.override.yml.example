@@ -1,0 +1,24 @@
+# Docker Compose override file for development
+# Copy this file to docker-compose.override.yml for development settings
+
+version: '3.8'
+
+services:
+  audio-stream-recorder:
+    # Development-specific settings
+    environment:
+      - LOG_LEVEL=DEBUG
+      - MONITORING_INTERVAL=30
+    
+    # Mount source code for development (optional)
+    # volumes:
+    #   - ./src:/app/src
+    #   - ./templates:/app/templates
+    #   - ./static:/app/static
+    
+    # Expose additional ports for debugging (optional)
+    # ports:
+    #   - "5678:5678"  # For debugpy or similar
+    
+    # Override restart policy for development
+    restart: "no"

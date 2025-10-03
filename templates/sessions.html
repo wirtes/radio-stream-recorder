@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+
+{% block title %}Recording Sessions - Audio Stream Recorder{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Recording Sessions</h1>
+    <div>
+        <button id="refresh-sessions" class="btn btn-secondary">Refresh</button>
+        <button id="show-statistics" class="btn btn-info">Statistics</button>
+    </div>
+</div>
+
+<!-- Filter Options -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="filter-status" class="form-label">Filter by Status</label>
+                    <select id="filter-status" class="form-control">
+                        <option value="">All Sessions</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="recording">Recording</option>
+                        <option value="processing">Processing</option>
+                        <option value="completed">Completed</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="filter-days" class="form-label">Recent Days</label>
+                    <select id="filter-days" class="form-control">
+                        <option value="">All Time</option>
+                        <option value="1">Last 24 hours</option>
+                        <option value="7" selected>Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="filter-schedule" class="form-label">Filter by Schedule</label>
+                    <select id="filter-schedule" class="form-control">
+                        <option value="">All Schedules</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <div>
+                        <button id="apply-filters" class="btn btn-primary">Apply</button>
+                        <button id="clear-filters" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Sessions Alert -->
+<div id="active-sessions-alert" class="alert alert-info" style="display: none;">
+    <h6>Active Recording Sessions</h6>
+    <div id="active-sessions-list"></div>
+</div>
+
+<!-- Sessions Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Recording Sessions</h5>
+    </div>
+    <div class="card-body">
+        <div id="sessions-loading" class="text-center">
+            <div class="spinner"></div>
+            <span class="ml-2">Loading sessions...</span>
+        </div>
+        
+        <div id="sessions-table-container" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Schedule</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>File Size</th>
+                            <th>Transfer</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessions-table-body">
+                        <!-- Sessions will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="pagination-container" class="mt-3 text-center">
+                <!-- Pagination will be added here -->
+            </div>
+        </div>
+        
+        <div id="no-sessions" style="display: none;">
+            <div class="text-center">
+                <p class="text-muted">No recording sessions found.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Session Details Modal -->
+<div id="session-details-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h5>Session Details</h5>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="session-details-content">
+                <!-- Session details will be loaded here -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="session-details-close" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Modal -->
+<div id="statistics-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h5>Recording Statistics</h5>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="statistics-content">
+                <div class="text-center">
+                    <div class="spinner"></div>
+                    <span class="ml-2">Loading statistics...</span>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="statistics-close" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.session-status {
+    font-weight: bold;
+}
+
+.status-scheduled {
+    color: var(--info-color);
+}
+
+.status-recording {
+    color: var(--warning-color);
+}
+
+.status-processing {
+    color: var(--info-color);
+}
+
+.status-completed {
+    color: var(--success-color);
+}
+
+.status-failed {
+    color: var(--danger-color);
+}
+
+.transfer-status {
+    font-size: 0.875rem;
+}
+
+.transfer-pending {
+    color: var(--secondary-color);
+}
+
+.transfer-in_progress {
+    color: var(--info-color);
+}
+
+.transfer-completed {
+    color: var(--success-color);
+}
+
+.transfer-failed {
+    color: var(--danger-color);
+}
+
+.session-duration {
+    font-family: monospace;
+}
+
+.active-session-item {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-left: 4px solid var(--warning-color);
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.pagination button {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    background-color: white;
+    cursor: pointer;
+    border-radius: var(--border-radius);
+}
+
+.pagination button:hover:not(:disabled) {
+    background-color: var(--light-color);
+}
+
+.pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination button.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentSessions = [];
+    let currentSchedules = [];
+    let currentPage = 1;
+    let totalPages = 1;
+    const sessionsPerPage = 20;
+    
+    // Load data on page load
+    loadSchedules();
+    loadSessions();
+    
+    // Event listeners
+    document.getElementById('refresh-sessions').addEventListener('click', loadSessions);
+    document.getElementById('apply-filters').addEventListener('click', applyFilters);
+    document.getElementById('clear-filters').addEventListener('click', clearFilters);
+    document.getElementById('show-statistics').addEventListener('click', showStatistics);
+    
+    // Modal event listeners
+    document.getElementById('session-details-close').addEventListener('click', hideSessionDetails);
+    document.getElementById('statistics-close').addEventListener('click', hideStatistics);
+    document.querySelectorAll('.modal-close').forEach(btn => {
+        btn.addEventListener('click', function() {
+            hideSessionDetails();
+            hideStatistics();
+        });
+    });
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadSessions, 30000);
+    
+    function loadSchedules() {
+        fetch('/api/schedules')
+            .then(response => response.json())
+            .then(data => {
+                currentSchedules = data;
+                populateScheduleFilter(data);
+            })
+            .catch(error => {
+                console.error('Error loading schedules:', error);
+            });
+    }
+    
+    function populateScheduleFilter(schedules) {
+        const select = document.getElementById('filter-schedule');
+        const currentValue = select.value;
+        
+        // Clear existing options except "All Schedules"
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        schedules.forEach(schedule => {
+            const option = document.createElement('option');
+            option.value = schedule.id;
+            option.textContent = `Schedule #${schedule.id} (${schedule.cron_expression})`;
+            select.appendChild(option);
+        });
+        
+        // Restore previous selection
+        select.value = currentValue;
+    }
+    
+    function loadSessions() {
+        document.getElementById('sessions-loading').style.display = 'block';
+        document.getElementById('sessions-table-container').style.display = 'none';
+        document.getElementById('no-sessions').style.display = 'none';
+        
+        let url = '/api/sessions';
+        const params = new URLSearchParams();
+        
+        const statusFilter = document.getElementById('filter-status').value;
+        const daysFilter = document.getElementById('filter-days').value;
+        const scheduleFilter = document.getElementById('filter-schedule').value;
+        
+        if (statusFilter) {
+            params.append('status', statusFilter);
+        }
+        if (daysFilter) {
+            params.append('recent_days', daysFilter);
+        }
+        if (scheduleFilter) {
+            params.append('schedule_id', scheduleFilter);
+        }
+        
+        params.append('skip', (currentPage - 1) * sessionsPerPage);
+        params.append('limit', sessionsPerPage);
+        
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                currentSessions = data;
+                displaySessions(data);
+                updateActiveSessions(data);
+            })
+            .catch(error => {
+                console.error('Error loading sessions:', error);
+                AudioRecorder.showAlert('Failed to load sessions', 'danger');
+                document.getElementById('sessions-loading').style.display = 'none';
+                document.getElementById('no-sessions').style.display = 'block';
+            });
+    }
+    
+    function displaySessions(sessions) {
+        document.getElementById('sessions-loading').style.display = 'none';
+        
+        if (sessions.length === 0) {
+            document.getElementById('no-sessions').style.display = 'block';
+            document.getElementById('sessions-table-container').style.display = 'none';
+            return;
+        }
+        
+        const tbody = document.getElementById('sessions-table-body');
+        tbody.innerHTML = '';
+        
+        sessions.forEach(session => {
+            const schedule = currentSchedules.find(s => s.id === session.schedule_id);
+            const scheduleInfo = schedule ? `#${schedule.id}` : `#${session.schedule_id}`;
+            
+            const startTime = new Date(session.start_time);
+            const endTime = session.end_time ? new Date(session.end_time) : null;
+            const duration = calculateDuration(session.start_time, session.end_time, session.status);
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>#${session.id}</strong></td>
+                <td>${scheduleInfo}</td>
+                <td>${startTime.toLocaleString()}</td>
+                <td>${endTime ? endTime.toLocaleString() : '-'}</td>
+                <td class="session-duration">${duration}</td>
+                <td>
+                    <span class="session-status status-${session.status}">${formatStatus(session.status)}</span>
+                    ${session.error_message ? '<br><small class="text-danger">Error</small>' : ''}
+                </td>
+                <td>${session.file_size_bytes ? AudioRecorder.formatFileSize(session.file_size_bytes) : '-'}</td>
+                <td>
+                    <span class="transfer-status transfer-${session.transfer_status}">${formatTransferStatus(session.transfer_status)}</span>
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="showSessionDetails(${session.id})">Details</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        document.getElementById('sessions-table-container').style.display = 'block';
+        document.getElementById('no-sessions').style.display = 'none';
+        
+        // Update pagination (simplified - would need total count from API)
+        updatePagination();
+    }
+    
+    function updateActiveSessions(sessions) {
+        const activeSessions = sessions.filter(s => s.status === 'recording' || s.status === 'processing');
+        const alertDiv = document.getElementById('active-sessions-alert');
+        const listDiv = document.getElementById('active-sessions-list');
+        
+        if (activeSessions.length > 0) {
+            listDiv.innerHTML = activeSessions.map(session => {
+                const schedule = currentSchedules.find(s => s.id === session.schedule_id);
+                const scheduleInfo = schedule ? `Schedule #${schedule.id}` : `Schedule #${session.schedule_id}`;
+                const duration = calculateDuration(session.start_time, null, session.status);
+                
+                return `
+                    <div class="active-session-item">
+                        <strong>Session #${session.id}</strong> - ${scheduleInfo}<br>
+                        <small>Status: ${formatStatus(session.status)} | Duration: ${duration}</small>
+                    </div>
+                `;
+            }).join('');
+            
+            alertDiv.style.display = 'block';
+        } else {
+            alertDiv.style.display = 'none';
+        }
+    }
+    
+    function calculateDuration(startTime, endTime, status) {
+        const start = new Date(startTime);
+        const end = endTime ? new Date(endTime) : new Date();
+        
+        if (status === 'scheduled') {
+            return '-';
+        }
+        
+        const diffMs = end - start;
+        const diffSeconds = Math.floor(diffMs / 1000);
+        
+        return AudioRecorder.formatDuration(diffSeconds);
+    }
+    
+    function formatStatus(status) {
+        const statusMap = {
+            'scheduled': 'Scheduled',
+            'recording': 'Recording',
+            'processing': 'Processing',
+            'completed': 'Completed',
+            'failed': 'Failed'
+        };
+        return statusMap[status] || status;
+    }
+    
+    function formatTransferStatus(status) {
+        const statusMap = {
+            'pending': 'Pending',
+            'in_progress': 'In Progress',
+            'completed': 'Completed',
+            'failed': 'Failed'
+        };
+        return statusMap[status] || status;
+    }
+    
+    function updatePagination() {
+        const container = document.getElementById('pagination-container');
+        
+        // Simplified pagination - in a real implementation, you'd get total count from API
+        if (currentSessions.length === sessionsPerPage) {
+            container.innerHTML = `
+                <div class="pagination">
+                    <button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">Previous</button>
+                    <button class="active">${currentPage}</button>
+                    <button onclick="changePage(${currentPage + 1})">Next</button>
+                </div>
+            `;
+        } else {
+            container.innerHTML = '';
+        }
+    }
+    
+    function applyFilters() {
+        currentPage = 1;
+        loadSessions();
+    }
+    
+    function clearFilters() {
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-days').value = '7';
+        document.getElementById('filter-schedule').value = '';
+        currentPage = 1;
+        loadSessions();
+    }
+    
+    function showStatistics() {
+        document.getElementById('statistics-modal').style.display = 'block';
+        document.getElementById('statistics-content').innerHTML = `
+            <div class="text-center">
+                <div class="spinner"></div>
+                <span class="ml-2">Loading statistics...</span>
+            </div>
+        `;
+        
+        fetch('/api/sessions/statistics')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('statistics-content').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Total Sessions</h6>
+                            <p class="h4 text-primary">${data.total_sessions}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Success Rate</h6>
+                            <p class="h4 text-success">${data.success_rate}%</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Completed</h6>
+                            <p class="h5 text-success">${data.completed_sessions}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Failed</h6>
+                            <p class="h5 text-danger">${data.failed_sessions}</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Active</h6>
+                            <p class="h5 text-warning">${data.active_sessions}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Total</h6>
+                            <p class="h5 text-info">${data.total_sessions}</p>
+                        </div>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error loading statistics:', error);
+                document.getElementById('statistics-content').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load statistics
+                    </div>
+                `;
+            });
+    }
+    
+    function hideStatistics() {
+        document.getElementById('statistics-modal').style.display = 'none';
+    }
+    
+    function hideSessionDetails() {
+        document.getElementById('session-details-modal').style.display = 'none';
+    }
+    
+    // Global functions
+    window.showSessionDetails = function(sessionId) {
+        document.getElementById('session-details-modal').style.display = 'block';
+        document.getElementById('session-details-content').innerHTML = `
+            <div class="text-center">
+                <div class="spinner"></div>
+                <span class="ml-2">Loading session details...</span>
+            </div>
+        `;
+        
+        fetch(`/api/sessions/${sessionId}`)
+            .then(response => response.json())
+            .then(session => {
+                const schedule = currentSchedules.find(s => s.id === session.schedule_id);
+                const startTime = new Date(session.start_time);
+                const endTime = session.end_time ? new Date(session.end_time) : null;
+                const duration = calculateDuration(session.start_time, session.end_time, session.status);
+                
+                document.getElementById('session-details-content').innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Session Information</h6>
+                            <p><strong>ID:</strong> #${session.id}</p>
+                            <p><strong>Schedule:</strong> #${session.schedule_id}</p>
+                            <p><strong>Status:</strong> <span class="session-status status-${session.status}">${formatStatus(session.status)}</span></p>
+                            <p><strong>Start Time:</strong> ${startTime.toLocaleString()}</p>
+                            <p><strong>End Time:</strong> ${endTime ? endTime.toLocaleString() : 'Not finished'}</p>
+                            <p><strong>Duration:</strong> ${duration}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>File Information</h6>
+                            <p><strong>Output File:</strong> ${session.output_file_path || 'Not available'}</p>
+                            <p><strong>File Size:</strong> ${session.file_size_bytes ? AudioRecorder.formatFileSize(session.file_size_bytes) : 'Not available'}</p>
+                            <p><strong>Transfer Status:</strong> <span class="transfer-status transfer-${session.transfer_status}">${formatTransferStatus(session.transfer_status)}</span></p>
+                        </div>
+                    </div>
+                    ${session.error_message ? `
+                        <div class="mt-3">
+                            <h6>Error Details</h6>
+                            <div class="alert alert-danger">
+                                ${session.error_message}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${schedule ? `
+                        <div class="mt-3">
+                            <h6>Schedule Information</h6>
+                            <p><strong>Cron Expression:</strong> <code>${schedule.cron_expression}</code></p>
+                            <p><strong>Duration:</strong> ${schedule.duration_minutes} minutes</p>
+                            <p><strong>Active:</strong> ${schedule.is_active ? 'Yes' : 'No'}</p>
+                        </div>
+                    ` : ''}
+                `;
+            })
+            .catch(error => {
+                console.error('Error loading session details:', error);
+                document.getElementById('session-details-content').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load session details
+                    </div>
+                `;
+            });
+    };
+    
+    window.changePage = function(page) {
+        if (page < 1) return;
+        currentPage = page;
+        loadSessions();
+    };
+});
+</script>
+{% endblock %}

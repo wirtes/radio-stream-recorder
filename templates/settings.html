@@ -1,0 +1,565 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Audio Stream Recorder{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>System Settings</h1>
+    <div>
+        <button id="refresh-status" class="btn btn-secondary">Refresh Status</button>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">System Status</h5>
+    </div>
+    <div class="card-body">
+        <div id="system-status-loading" class="text-center">
+            <div class="spinner"></div>
+            <span class="ml-2">Loading system status...</span>
+        </div>
+        
+        <div id="system-status-content" style="display: none;">
+            <!-- System status will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<!-- System Health -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Health Checks</h5>
+    </div>
+    <div class="card-body">
+        <div id="health-checks-loading" class="text-center">
+            <div class="spinner"></div>
+            <span class="ml-2">Running health checks...</span>
+        </div>
+        
+        <div id="health-checks-content" style="display: none;">
+            <!-- Health checks will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<!-- System Metrics -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">System Metrics</h5>
+    </div>
+    <div class="card-body">
+        <div id="metrics-loading" class="text-center">
+            <div class="spinner"></div>
+            <span class="ml-2">Loading metrics...</span>
+        </div>
+        
+        <div id="metrics-content" style="display: none;">
+            <!-- Metrics will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<!-- Configuration Information -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Configuration</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Application Settings</h6>
+                <ul class="list-unstyled">
+                    <li><strong>Web Port:</strong> 8666 (default)</li>
+                    <li><strong>Max Concurrent Recordings:</strong> 3 (default)</li>
+                    <li><strong>Max Artwork Size:</strong> 10MB</li>
+                    <li><strong>Default Max Retries:</strong> 3</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>Directory Paths</h6>
+                <ul class="list-unstyled">
+                    <li><strong>Recordings:</strong> /app/recordings</li>
+                    <li><strong>Artwork:</strong> /app/artwork</li>
+                    <li><strong>Logs:</strong> /app/logs</li>
+                    <li><strong>Config:</strong> /app/config</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">System Actions</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Configuration Management</h6>
+                <p class="text-muted">Export and import system configurations.</p>
+                <div class="btn-group-mobile">
+                    <button id="export-all-config" class="btn btn-primary">Export All Configuration</button>
+                    <button id="import-config" class="btn btn-secondary">Import Configuration</button>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6>System Information</h6>
+                <p class="text-muted">View detailed system information and logs.</p>
+                <div class="btn-group-mobile">
+                    <a href="{{ url_for('main.logs') }}" class="btn btn-info">View System Logs</a>
+                    <button id="download-logs" class="btn btn-secondary">Download Logs</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Configuration Modal -->
+<div id="import-config-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5>Import Configuration</h5>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="alert alert-warning">
+                <strong>Warning:</strong> Importing configuration will add new streams and schedules. 
+                Existing configurations with the same names may cause conflicts.
+            </div>
+            
+            <form id="import-config-form">
+                <div class="form-group">
+                    <label for="config-file" class="form-label">Select Configuration File</label>
+                    <input type="file" id="config-file" class="form-control" accept=".json">
+                    <small class="form-text text-muted">Upload a JSON file exported from this system.</small>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button id="import-config-cancel" class="btn btn-secondary">Cancel</button>
+            <button id="import-config-confirm" class="btn btn-primary">Import</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.health-check-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.health-check-item:last-child {
+    border-bottom: none;
+}
+
+.health-status {
+    font-weight: bold;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.health-status.healthy {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.health-status.warning {
+    background-color: var(--warning-color);
+    color: var(--dark-color);
+}
+
+.health-status.unhealthy {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+.health-status.unknown {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.metric-item {
+    text-align: center;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: 1rem;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: var(--secondary-color);
+    margin-top: 0.25rem;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: var(--light-color);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}
+
+.progress-fill.warning {
+    background-color: var(--warning-color);
+}
+
+.progress-fill.danger {
+    background-color: var(--danger-color);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load system information on page load
+    loadSystemStatus();
+    loadHealthChecks();
+    loadSystemMetrics();
+    
+    // Event listeners
+    document.getElementById('refresh-status').addEventListener('click', refreshAll);
+    document.getElementById('export-all-config').addEventListener('click', exportAllConfiguration);
+    document.getElementById('import-config').addEventListener('click', showImportModal);
+    document.getElementById('download-logs').addEventListener('click', downloadLogs);
+    
+    // Modal event listeners
+    document.getElementById('import-config-cancel').addEventListener('click', hideImportModal);
+    document.getElementById('import-config-confirm').addEventListener('click', importConfiguration);
+    document.querySelector('.modal-close').addEventListener('click', hideImportModal);
+    
+    // Auto-refresh every 30 seconds
+    setInterval(refreshAll, 30000);
+    
+    function refreshAll() {
+        loadSystemStatus();
+        loadHealthChecks();
+        loadSystemMetrics();
+    }
+    
+    function loadSystemStatus() {
+        document.getElementById('system-status-loading').style.display = 'block';
+        document.getElementById('system-status-content').style.display = 'none';
+        
+        fetch('/api/system/status')
+            .then(response => response.json())
+            .then(data => {
+                displaySystemStatus(data);
+            })
+            .catch(error => {
+                console.error('Error loading system status:', error);
+                document.getElementById('system-status-content').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load system status: ${error.message}
+                    </div>
+                `;
+                document.getElementById('system-status-loading').style.display = 'none';
+                document.getElementById('system-status-content').style.display = 'block';
+            });
+    }
+    
+    function displaySystemStatus(data) {
+        const content = document.getElementById('system-status-content');
+        
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">
+                            <span class="badge ${data.status === 'healthy' ? 'badge-success' : 'badge-danger'}">
+                                ${data.status.toUpperCase()}
+                            </span>
+                        </div>
+                        <div class="metric-label">System Status</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">${data.active_recordings}</div>
+                        <div class="metric-label">Active Recordings</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">${data.total_recordings}</div>
+                        <div class="metric-label">Total Recordings</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">${AudioRecorder.formatDuration(data.uptime_seconds || 0)}</div>
+                        <div class="metric-label">Uptime</div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-6">
+                    <h6>Disk Usage</h6>
+                    <div class="progress-bar">
+                        <div class="progress-fill ${getProgressClass(data.disk_usage_percent)}" 
+                             style="width: ${data.disk_usage_percent}%"></div>
+                    </div>
+                    <small class="text-muted">${data.disk_usage_percent.toFixed(1)}% used</small>
+                </div>
+                <div class="col-md-6">
+                    <h6>Memory Usage</h6>
+                    <div class="progress-bar">
+                        <div class="progress-fill ${getProgressClass(data.memory_usage_percent)}" 
+                             style="width: ${data.memory_usage_percent}%"></div>
+                    </div>
+                    <small class="text-muted">${data.memory_usage_percent.toFixed(1)}% used</small>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('system-status-loading').style.display = 'none';
+        document.getElementById('system-status-content').style.display = 'block';
+    }
+    
+    function loadHealthChecks() {
+        document.getElementById('health-checks-loading').style.display = 'block';
+        document.getElementById('health-checks-content').style.display = 'none';
+        
+        fetch('/api/system/health')
+            .then(response => response.json())
+            .then(data => {
+                displayHealthChecks(data);
+            })
+            .catch(error => {
+                console.error('Error loading health checks:', error);
+                document.getElementById('health-checks-content').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load health checks: ${error.message}
+                    </div>
+                `;
+                document.getElementById('health-checks-loading').style.display = 'none';
+                document.getElementById('health-checks-content').style.display = 'block';
+            });
+    }
+    
+    function displayHealthChecks(data) {
+        const content = document.getElementById('health-checks-content');
+        
+        let checksHtml = '';
+        if (data.checks) {
+            Object.entries(data.checks).forEach(([checkName, checkData]) => {
+                checksHtml += `
+                    <div class="health-check-item">
+                        <div>
+                            <strong>${formatCheckName(checkName)}</strong>
+                            <br>
+                            <small class="text-muted">${checkData.message}</small>
+                        </div>
+                        <span class="health-status ${checkData.status}">${checkData.status.toUpperCase()}</span>
+                    </div>
+                `;
+            });
+        }
+        
+        content.innerHTML = `
+            <div class="mb-3">
+                <strong>Overall Status:</strong> 
+                <span class="health-status ${data.status}">${data.status.toUpperCase()}</span>
+            </div>
+            ${checksHtml}
+            <div class="mt-2">
+                <small class="text-muted">Last updated: ${new Date(data.timestamp).toLocaleString()}</small>
+            </div>
+        `;
+        
+        document.getElementById('health-checks-loading').style.display = 'none';
+        document.getElementById('health-checks-content').style.display = 'block';
+    }
+    
+    function loadSystemMetrics() {
+        document.getElementById('metrics-loading').style.display = 'block';
+        document.getElementById('metrics-content').style.display = 'none';
+        
+        fetch('/api/system/metrics')
+            .then(response => response.json())
+            .then(data => {
+                displaySystemMetrics(data);
+            })
+            .catch(error => {
+                console.error('Error loading system metrics:', error);
+                document.getElementById('metrics-content').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load system metrics: ${error.message}
+                    </div>
+                `;
+                document.getElementById('metrics-loading').style.display = 'none';
+                document.getElementById('metrics-content').style.display = 'block';
+            });
+    }
+    
+    function displaySystemMetrics(data) {
+        const content = document.getElementById('metrics-content');
+        
+        content.innerHTML = `
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">${data.cpu.usage_percent.toFixed(1)}%</div>
+                        <div class="metric-label">CPU Usage</div>
+                        <small class="text-muted">${data.cpu.count} cores</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">${data.memory.usage_percent.toFixed(1)}%</div>
+                        <div class="metric-label">Memory Usage</div>
+                        <small class="text-muted">${data.memory.used_gb.toFixed(1)}GB / ${data.memory.total_gb.toFixed(1)}GB</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">${data.disk.usage_percent.toFixed(1)}%</div>
+                        <div class="metric-label">Disk Usage</div>
+                        <small class="text-muted">${data.disk.used_gb.toFixed(1)}GB / ${data.disk.total_gb.toFixed(1)}GB</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-item">
+                        <div class="metric-value">${data.disk.free_gb.toFixed(1)}GB</div>
+                        <div class="metric-label">Free Space</div>
+                        <small class="text-muted">Available</small>
+                    </div>
+                </div>
+            </div>
+            ${data.network ? `
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6>Network I/O</h6>
+                        <p><strong>Bytes Sent:</strong> ${AudioRecorder.formatFileSize(data.network.bytes_sent)}</p>
+                        <p><strong>Bytes Received:</strong> ${AudioRecorder.formatFileSize(data.network.bytes_recv)}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Network Packets</h6>
+                        <p><strong>Packets Sent:</strong> ${data.network.packets_sent.toLocaleString()}</p>
+                        <p><strong>Packets Received:</strong> ${data.network.packets_recv.toLocaleString()}</p>
+                    </div>
+                </div>
+            ` : ''}
+            <div class="mt-2">
+                <small class="text-muted">Last updated: ${new Date(data.timestamp).toLocaleString()}</small>
+            </div>
+        `;
+        
+        document.getElementById('metrics-loading').style.display = 'none';
+        document.getElementById('metrics-content').style.display = 'block';
+    }
+    
+    function exportAllConfiguration() {
+        fetch('/api/streams/export')
+            .then(response => response.json())
+            .then(data => {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `audio-recorder-config-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                AudioRecorder.showAlert('Configuration exported successfully', 'success');
+            })
+            .catch(error => {
+                console.error('Export error:', error);
+                AudioRecorder.showAlert('Failed to export configuration', 'danger');
+            });
+    }
+    
+    function downloadLogs() {
+        // This would typically download log files
+        // For now, we'll just show an alert
+        AudioRecorder.showAlert('Log download feature not yet implemented', 'info');
+    }
+    
+    function showImportModal() {
+        document.getElementById('import-config-modal').style.display = 'block';
+    }
+    
+    function hideImportModal() {
+        document.getElementById('import-config-modal').style.display = 'none';
+        document.getElementById('config-file').value = '';
+    }
+    
+    function importConfiguration() {
+        const fileInput = document.getElementById('config-file');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            AudioRecorder.showAlert('Please select a file to import', 'warning');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                
+                fetch('/api/streams/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(result => {
+                    hideImportModal();
+                    if (result.errors && result.errors.length > 0) {
+                        AudioRecorder.showAlert(`Import completed with ${result.errors.length} errors. Check console for details.`, 'warning');
+                        console.log('Import errors:', result.errors);
+                    } else {
+                        AudioRecorder.showAlert(`Import successful: ${result.imported_streams} streams, ${result.imported_schedules} schedules`, 'success');
+                    }
+                })
+                .catch(error => {
+                    console.error('Import error:', error);
+                    AudioRecorder.showAlert('Failed to import configuration', 'danger');
+                    hideImportModal();
+                });
+            } catch (error) {
+                AudioRecorder.showAlert('Invalid JSON file', 'danger');
+            }
+        };
+        reader.readAsText(file);
+    }
+    
+    function getProgressClass(percentage) {
+        if (percentage > 90) return 'danger';
+        if (percentage > 75) return 'warning';
+        return '';
+    }
+    
+    function formatCheckName(name) {
+        return name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
+    }
+});
+</script>
+{% endblock %}

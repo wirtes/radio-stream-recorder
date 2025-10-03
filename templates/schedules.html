@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block title %}Recording Schedules - Audio Stream Recorder{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Recording Schedules</h1>
+    <div>
+        <a href="{{ url_for('main.new_schedule') }}" class="btn btn-primary">Add New Schedule</a>
+        <button id="refresh-schedules" class="btn btn-secondary">Refresh</button>
+    </div>
+</div>
+
+<!-- Filter Options -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="filter-status" class="form-label">Filter by Status</label>
+                    <select id="filter-status" class="form-control">
+                        <option value="">All Schedules</option>
+                        <option value="active">Active Only</option>
+                        <option value="inactive">Inactive Only</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label for="filter-stream" class="form-label">Filter by Stream</label>
+                    <select id="filter-stream" class="form-control">
+                        <option value="">All Streams</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <div>
+                        <button id="apply-filters" class="btn btn-primary">Apply Filters</button>
+                        <button id="clear-filters" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedules Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Configured Schedules</h5>
+    </div>
+    <div class="card-body">
+        <div id="schedules-loading" class="text-center">
+            <div class="spinner"></div>
+            <span class="ml-2">Loading schedules...</span>
+        </div>
+        
+        <div id="schedules-table-container" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Stream</th>
+                            <th>Schedule</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Next Run</th>
+                            <th>Last Run</th>
+                            <th>Retry Count</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="schedules-table-body">
+                        <!-- Schedules will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="no-schedules" style="display: none;">
+            <div class="text-center">
+                <p class="text-muted">No recording schedules found.</p>
+                <a href="{{ url_for('main.new_schedule') }}" class="btn btn-primary">Create Your First Schedule</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cron Expression Helper Modal -->
+<div id="cron-helper-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h5>Cron Expression Helper</h5>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="cron-input" class="form-label">Cron Expression</label>
+                <input type="text" id="cron-input" class="form-control" placeholder="0 9 * * 1-5">
+                <small class="form-text text-muted">Format: minute hour day month weekday</small>
+            </div>
+            
+            <button id="validate-cron" class="btn btn-primary">Validate & Preview</button>
+            
+            <div id="cron-result" class="mt-3" style="display: none;">
+                <div class="alert alert-info">
+                    <h6>Schedule Description:</h6>
+                    <p id="cron-description"></p>
+                    
+                    <h6>Next 5 Run Times:</h6>
+                    <ul id="cron-next-runs"></ul>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <h6>Common Examples:</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="small">
+                            <li><code>0 9 * * *</code> - Daily at 9:00 AM</li>
+                            <li><code>0 9 * * 1-5</code> - Weekdays at 9:00 AM</li>
+                            <li><code>0 20 * * 0</code> - Sundays at 8:00 PM</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="small">
+                            <li><code>30 14 * * 6</code> - Saturdays at 2:30 PM</li>
+                            <li><code>0 */2 * * *</code> - Every 2 hours</li>
+                            <li><code>0 0 1 * *</code> - First day of each month</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="cron-helper-close" class="btn btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.schedule-status {
+    font-weight: bold;
+}
+
+.status-active {
+    color: var(--success-color);
+}
+
+.status-inactive {
+    color: var(--secondary-color);
+}
+
+.next-run-soon {
+    color: var(--warning-color);
+    font-weight: bold;
+}
+
+.next-run-overdue {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+.retry-count-high {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+.cron-expression {
+    font-family: monospace;
+    background-color: var(--light-color);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentSchedules = [];
+    let currentStreams = [];
+    
+    // Load data on page load
+    loadStreams();
+    loadSchedules();
+    
+    // Event listeners
+    document.getElementById('refresh-schedules').addEventListener('click', loadSchedules);
+    document.getElementById('apply-filters').addEventListener('click', applyFilters);
+    document.getElementById('clear-filters').addEventListener('click', clearFilters);
+    
+    // Cron helper modal
+    document.getElementById('validate-cron').addEventListener('click', validateCronExpression);
+    document.getElementById('cron-helper-close').addEventListener('click', hideCronHelper);
+    document.querySelector('.modal-close').addEventListener('click', hideCronHelper);
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadSchedules, 30000);
+    
+    function loadStreams() {
+        fetch('/api/streams')
+            .then(response => response.json())
+            .then(data => {
+                currentStreams = data;
+                populateStreamFilter(data);
+            })
+            .catch(error => {
+                console.error('Error loading streams:', error);
+            });
+    }
+    
+    function populateStreamFilter(streams) {
+        const select = document.getElementById('filter-stream');
+        const currentValue = select.value;
+        
+        // Clear existing options except "All Streams"
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        streams.forEach(stream => {
+            const option = document.createElement('option');
+            option.value = stream.id;
+            option.textContent = stream.name;
+            select.appendChild(option);
+        });
+        
+        // Restore previous selection
+        select.value = currentValue;
+    }
+    
+    function loadSchedules() {
+        document.getElementById('schedules-loading').style.display = 'block';
+        document.getElementById('schedules-table-container').style.display = 'none';
+        document.getElementById('no-schedules').style.display = 'none';
+        
+        let url = '/api/schedules';
+        const params = new URLSearchParams();
+        
+        const statusFilter = document.getElementById('filter-status').value;
+        const streamFilter = document.getElementById('filter-stream').value;
+        
+        if (statusFilter === 'active') {
+            params.append('active', 'true');
+        }
+        if (streamFilter) {
+            params.append('stream_config_id', streamFilter);
+        }
+        
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                currentSchedules = data;
+                displaySchedules(data);
+            })
+            .catch(error => {
+                console.error('Error loading schedules:', error);
+                AudioRecorder.showAlert('Failed to load schedules', 'danger');
+                document.getElementById('schedules-loading').style.display = 'none';
+                document.getElementById('no-schedules').style.display = 'block';
+            });
+    }
+    
+    function displaySchedules(schedules) {
+        document.getElementById('schedules-loading').style.display = 'none';
+        
+        // Filter by status if needed (for inactive filter)
+        if (document.getElementById('filter-status').value === 'inactive') {
+            schedules = schedules.filter(s => !s.is_active);
+        }
+        
+        if (schedules.length === 0) {
+            document.getElementById('no-schedules').style.display = 'block';
+            document.getElementById('schedules-table-container').style.display = 'none';
+            return;
+        }
+        
+        const tbody = document.getElementById('schedules-table-body');
+        tbody.innerHTML = '';
+        
+        schedules.forEach(schedule => {
+            const stream = currentStreams.find(s => s.id === schedule.stream_config_id);
+            const streamName = stream ? stream.name : `Stream #${schedule.stream_config_id}`;
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><strong>${escapeHtml(streamName)}</strong></td>
+                <td>
+                    <span class="cron-expression">${escapeHtml(schedule.cron_expression)}</span>
+                    <button class="btn btn-sm btn-link" onclick="showCronHelper('${schedule.cron_expression}')">?</button>
+                </td>
+                <td>${schedule.duration_minutes} min</td>
+                <td>
+                    <span class="schedule-status ${schedule.is_active ? 'status-active' : 'status-inactive'}">
+                        ${schedule.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td>${formatNextRun(schedule.next_run_time, schedule.is_active)}</td>
+                <td>${schedule.last_run_time ? new Date(schedule.last_run_time).toLocaleString() : 'Never'}</td>
+                <td>
+                    <span class="${schedule.retry_count >= schedule.max_retries ? 'retry-count-high' : ''}">
+                        ${schedule.retry_count}/${schedule.max_retries}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group-mobile">
+                        ${schedule.is_active ? 
+                            `<button class="btn btn-sm btn-warning" onclick="toggleSchedule(${schedule.id}, false)">Deactivate</button>` :
+                            `<button class="btn btn-sm btn-success" onclick="toggleSchedule(${schedule.id}, true)">Activate</button>`
+                        }
+                        <a href="/schedules/${schedule.id}/edit" class="btn btn-sm btn-secondary">Edit</a>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${schedule.id}, '${escapeHtml(streamName)}')">Delete</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        document.getElementById('schedules-table-container').style.display = 'block';
+        document.getElementById('no-schedules').style.display = 'none';
+    }
+    
+    function formatNextRun(nextRunTime, isActive) {
+        if (!isActive) {
+            return '<span class="text-muted">Inactive</span>';
+        }
+        
+        if (!nextRunTime) {
+            return '<span class="text-muted">Not scheduled</span>';
+        }
+        
+        const nextRun = new Date(nextRunTime);
+        const now = new Date();
+        const diffMinutes = (nextRun - now) / (1000 * 60);
+        
+        let className = '';
+        if (diffMinutes < 0) {
+            className = 'next-run-overdue';
+        } else if (diffMinutes < 60) {
+            className = 'next-run-soon';
+        }
+        
+        return `<span class="${className}">${nextRun.toLocaleString()}</span>`;
+    }
+    
+    function applyFilters() {
+        loadSchedules();
+    }
+    
+    function clearFilters() {
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-stream').value = '';
+        loadSchedules();
+    }
+    
+    function validateCronExpression() {
+        const cronInput = document.getElementById('cron-input');
+        const cronExpression = cronInput.value.trim();
+        
+        if (!cronExpression) {
+            AudioRecorder.showAlert('Please enter a cron expression', 'warning');
+            return;
+        }
+        
+        fetch('/api/schedules/validate-cron', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ cron_expression: cronExpression })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const resultDiv = document.getElementById('cron-result');
+            
+            if (data.valid) {
+                document.getElementById('cron-description').textContent = data.description;
+                
+                const nextRunsList = document.getElementById('cron-next-runs');
+                nextRunsList.innerHTML = '';
+                data.next_runs.forEach(runTime => {
+                    const li = document.createElement('li');
+                    li.textContent = new Date(runTime).toLocaleString();
+                    nextRunsList.appendChild(li);
+                });
+                
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'mt-3 alert alert-success';
+            } else {
+                document.getElementById('cron-description').textContent = data.error;
+                document.getElementById('cron-next-runs').innerHTML = '';
+                resultDiv.style.display = 'block';
+                resultDiv.className = 'mt-3 alert alert-danger';
+            }
+        })
+        .catch(error => {
+            console.error('Cron validation error:', error);
+            AudioRecorder.showAlert('Failed to validate cron expression', 'danger');
+        });
+    }
+    
+    function showCronHelper(cronExpression = '') {
+        document.getElementById('cron-input').value = cronExpression;
+        document.getElementById('cron-result').style.display = 'none';
+        document.getElementById('cron-helper-modal').style.display = 'block';
+        
+        if (cronExpression) {
+            validateCronExpression();
+        }
+    }
+    
+    function hideCronHelper() {
+        document.getElementById('cron-helper-modal').style.display = 'none';
+    }
+    
+    // Global functions for button actions
+    window.toggleSchedule = function(scheduleId, activate) {
+        const action = activate ? 'activate' : 'deactivate';
+        const button = event.target;
+        button.disabled = true;
+        button.textContent = activate ? 'Activating...' : 'Deactivating...';
+        
+        fetch(`/api/schedules/${scheduleId}/${action}`, { method: 'POST' })
+            .then(response => {
+                if (response.ok) {
+                    AudioRecorder.showAlert(`Schedule ${activate ? 'activated' : 'deactivated'} successfully`, 'success');
+                    loadSchedules(); // Reload the schedules list
+                } else {
+                    return response.json().then(err => Promise.reject(err));
+                }
+            })
+            .catch(error => {
+                console.error('Toggle error:', error);
+                AudioRecorder.showAlert(error.message || `Failed to ${action} schedule`, 'danger');
+                button.disabled = false;
+                button.textContent = activate ? 'Activate' : 'Deactivate';
+            });
+    };
+    
+    window.deleteSchedule = function(scheduleId, streamName) {
+        if (!confirm(`Are you sure you want to delete the schedule for "${streamName}"? This action cannot be undone.`)) {
+            return;
+        }
+        
+        fetch(`/api/schedules/${scheduleId}`, { method: 'DELETE' })
+            .then(response => {
+                if (response.ok) {
+                    AudioRecorder.showAlert(`Schedule for "${streamName}" deleted successfully`, 'success');
+                    loadSchedules(); // Reload the schedules list
+                } else {
+                    return response.json().then(err => Promise.reject(err));
+                }
+            })
+            .catch(error => {
+                console.error('Delete error:', error);
+                AudioRecorder.showAlert(error.message || 'Failed to delete schedule', 'danger');
+            });
+    };
+    
+    window.showCronHelper = showCronHelper;
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+});
+</script>
+{% endblock %}

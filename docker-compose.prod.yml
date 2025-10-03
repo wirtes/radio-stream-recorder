@@ -1,0 +1,110 @@
+# Audio Stream Recorder - Production Configuration
+# Optimized for production deployment with enhanced monitoring and resource management
+
+version: '3.8'
+
+services:
+  audio-stream-recorder:
+    build: .
+    container_name: audio-stream-recorder-prod
+    
+    # Production port mapping
+    ports:
+      - "${WEB_PORT:-8666}:8666"
+    
+    # Production volume mounts - choose between named volumes or bind mounts
+    volumes:
+      # Option 1: Named volumes (recommended for production)
+      - audio_recorder_data:/app/data
+      - audio_recorder_recordings:/app/recordings
+      - audio_recorder_config:/app/config
+      - audio_recorder_logs:/app/logs
+      - audio_recorder_artwork:/app/artwork
+      
+      # Option 2: Bind mounts (uncomment and comment above for direct host access)
+      # - /opt/audio-recorder/data:/app/data
+      # - /opt/audio-recorder/recordings:/app/recordings
+      # - /opt/audio-recorder/config:/app/config
+      # - /var/log/audio-recorder:/app/logs
+      # - /opt/audio-recorder/artwork:/app/artwork
+    
+    # Production environment variables
+    environment:
+      # Web interface configuration
+      - WEB_PORT=8666
+      - WEB_HOST=0.0.0.0
+      
+      # Logging configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Performance settings for production
+      - MAX_CONCURRENT_RECORDINGS=${MAX_CONCURRENT_RECORDINGS:-5}
+      - CLEANUP_AFTER_TRANSFER=${CLEANUP_AFTER_TRANSFER:-true}
+      - MAX_ARTWORK_SIZE_MB=${MAX_ARTWORK_SIZE_MB:-20}
+      
+      # Enhanced retry settings for production reliability
+      - DEFAULT_MAX_RETRIES=${DEFAULT_MAX_RETRIES:-5}
+      - RETRY_DELAY_SECONDS=${RETRY_DELAY_SECONDS:-120}
+      
+      # Monitoring configuration
+      - MONITORING_INTERVAL=${MONITORING_INTERVAL:-30}
+      - DISK_WARNING_THRESHOLD=${DISK_WARNING_THRESHOLD:-75.0}
+      - DISK_CRITICAL_THRESHOLD=${DISK_CRITICAL_THRESHOLD:-85.0}
+      - MEMORY_WARNING_THRESHOLD=${MEMORY_WARNING_THRESHOLD:-75.0}
+      - MEMORY_CRITICAL_THRESHOLD=${MEMORY_CRITICAL_THRESHOLD:-85.0}
+      
+      # Database configuration
+      - DATABASE_URL=sqlite:///app/data/audio_recorder.db
+      
+      # Timezone configuration
+      - TZ=${TZ:-UTC}
+    
+    # Always restart unless explicitly stopped
+    restart: unless-stopped
+    
+    # Enhanced health check for production monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8666/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Production network
+    networks:
+      - audio_recorder_network
+    
+    # Resource limits for production stability
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    
+    # Production logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+# Named volumes for persistent data storage
+volumes:
+  audio_recorder_data:
+    driver: local
+  audio_recorder_recordings:
+    driver: local
+  audio_recorder_config:
+    driver: local
+  audio_recorder_logs:
+    driver: local
+  audio_recorder_artwork:
+    driver: local
+
+# Network for the application
+networks:
+  audio_recorder_network:
+    driver: bridge

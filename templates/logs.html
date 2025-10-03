@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block title %}System Logs - Audio Stream Recorder{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>System Logs</h1>
+    <div>
+        <button id="refresh-logs" class="btn btn-secondary">Refresh</button>
+        <button id="auto-refresh-toggle" class="btn btn-outline-secondary">Auto Refresh: OFF</button>
+    </div>
+</div>
+
+<!-- Filter Options -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="filter-level" class="form-label">Log Level</label>
+                    <select id="filter-level" class="form-control">
+                        <option value="">All Levels</option>
+                        <option value="DEBUG">Debug</option>
+                        <option value="INFO">Info</option>
+                        <option value="WARNING">Warning</option>
+                        <option value="ERROR">Error</option>
+                        <option value="CRITICAL">Critical</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="filter-since" class="form-label">Since</label>
+                    <select id="filter-since" class="form-control">
+                        <option value="">All Time</option>
+                        <option value="1h">Last Hour</option>
+                        <option value="6h">Last 6 Hours</option>
+                        <option value="24h" selected>Last 24 Hours</option>
+                        <option value="7d">Last 7 Days</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="filter-limit" class="form-label">Entries per Page</label>
+                    <select id="filter-limit" class="form-control">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <div>
+                        <button id="apply-filters" class="btn btn-primary">Apply</button>
+                        <button id="clear-filters" class="btn btn-secondary">Clear</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Logs Display -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Log Entries</h5>
+        <div>
+            <small class="text-muted" id="logs-info">Loading...</small>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="logs-loading" class="text-center">
+            <div class="spinner"></div>
+            <span class="ml-2">Loading logs...</span>
+        </div>
+        
+        <div id="logs-container" style="display: none;">
+            <div id="logs-list">
+                <!-- Log entries will be loaded here -->
+            </div>
+            
+            <div id="pagination-container" class="mt-3 text-center">
+                <!-- Pagination will be added here -->
+            </div>
+        </div>
+        
+        <div id="no-logs" style="display: none;">
+            <div class="text-center">
+                <p class="text-muted">No log entries found for the selected criteria.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.log-entry {
+    border-left: 4px solid var(--border-color);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: #fff;
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.log-entry.level-DEBUG {
+    border-left-color: var(--secondary-color);
+    background-color: #f8f9fa;
+}
+
+.log-entry.level-INFO {
+    border-left-color: var(--info-color);
+    background-color: #f0f9ff;
+}
+
+.log-entry.level-WARNING {
+    border-left-color: var(--warning-color);
+    background-color: #fffbf0;
+}
+
+.log-entry.level-ERROR {
+    border-left-color: var(--danger-color);
+    background-color: #fff5f5;
+}
+
+.log-entry.level-CRITICAL {
+    border-left-color: #dc2626;
+    background-color: #fef2f2;
+}
+
+.log-timestamp {
+    color: var(--secondary-color);
+    font-weight: bold;
+}
+
+.log-level {
+    font-weight: bold;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    margin: 0 0.5rem;
+}
+
+.log-level.DEBUG {
+    background-color: var(--secondary-color);
+    color: white;
+}
+
+.log-level.INFO {
+    background-color: var(--info-color);
+    color: white;
+}
+
+.log-level.WARNING {
+    background-color: var(--warning-color);
+    color: var(--dark-color);
+}
+
+.log-level.ERROR {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+.log-level.CRITICAL {
+    background-color: #dc2626;
+    color: white;
+}
+
+.log-logger {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.log-message {
+    margin-top: 0.25rem;
+    color: var(--dark-color);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.auto-refresh-active {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+    color: white;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.pagination button {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    background-color: white;
+    cursor: pointer;
+    border-radius: var(--border-radius);
+}
+
+.pagination button:hover:not(:disabled) {
+    background-color: var(--light-color);
+}
+
+.pagination button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination button.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentPage = 1;
+    let totalPages = 1;
+    let autoRefreshInterval = null;
+    let isAutoRefreshActive = false;
+    
+    // Load logs on page load
+    loadLogs();
+    
+    // Event listeners
+    document.getElementById('refresh-logs').addEventListener('click', loadLogs);
+    document.getElementById('apply-filters').addEventListener('click', applyFilters);
+    document.getElementById('clear-filters').addEventListener('click', clearFilters);
+    document.getElementById('auto-refresh-toggle').addEventListener('click', toggleAutoRefresh);
+    
+    function loadLogs() {
+        document.getElementById('logs-loading').style.display = 'block';
+        document.getElementById('logs-container').style.display = 'none';
+        document.getElementById('no-logs').style.display = 'none';
+        
+        let url = '/api/system/logs';
+        const params = new URLSearchParams();
+        
+        const levelFilter = document.getElementById('filter-level').value;
+        const sinceFilter = document.getElementById('filter-since').value;
+        const limitFilter = document.getElementById('filter-limit').value;
+        
+        if (levelFilter) {
+            params.append('level', levelFilter);
+        }
+        
+        if (sinceFilter) {
+            const sinceDate = calculateSinceDate(sinceFilter);
+            if (sinceDate) {
+                params.append('since', sinceDate.toISOString());
+            }
+        }
+        
+        params.append('limit', limitFilter);
+        params.append('page', currentPage);
+        
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                displayLogs(data);
+                updateLogsInfo(data);
+                updatePagination(data);
+            })
+            .catch(error => {
+                console.error('Error loading logs:', error);
+                AudioRecorder.showAlert('Failed to load logs', 'danger');
+                document.getElementById('logs-loading').style.display = 'none';
+                document.getElementById('no-logs').style.display = 'block';
+            });
+    }
+    
+    function displayLogs(data) {
+        document.getElementById('logs-loading').style.display = 'none';
+        
+        if (!data.logs || data.logs.length === 0) {
+            document.getElementById('no-logs').style.display = 'block';
+            document.getElementById('logs-container').style.display = 'none';
+            return;
+        }
+        
+        const logsContainer = document.getElementById('logs-list');
+        logsContainer.innerHTML = '';
+        
+        data.logs.forEach(logEntry => {
+            const entryDiv = document.createElement('div');
+            entryDiv.className = `log-entry level-${logEntry.level}`;
+            
+            const timestamp = new Date(logEntry.timestamp).toLocaleString();
+            
+            entryDiv.innerHTML = `
+                <div>
+                    <span class="log-timestamp">${timestamp}</span>
+                    <span class="log-level ${logEntry.level}">${logEntry.level}</span>
+                    <span class="log-logger">${escapeHtml(logEntry.logger)}</span>
+                </div>
+                <div class="log-message">${escapeHtml(logEntry.message)}</div>
+            `;
+            
+            logsContainer.appendChild(entryDiv);
+        });
+        
+        document.getElementById('logs-container').style.display = 'block';
+        document.getElementById('no-logs').style.display = 'none';
+    }
+    
+    function updateLogsInfo(data) {
+        const infoElement = document.getElementById('logs-info');
+        const totalCount = data.total_count || 0;
+        const currentCount = data.logs ? data.logs.length : 0;
+        const startIndex = ((data.page || 1) - 1) * (data.per_page || 100) + 1;
+        const endIndex = startIndex + currentCount - 1;
+        
+        if (totalCount > 0) {
+            infoElement.textContent = `Showing ${startIndex}-${endIndex} of ${totalCount} entries`;
+        } else {
+            infoElement.textContent = 'No entries found';
+        }
+    }
+    
+    function updatePagination(data) {
+        const container = document.getElementById('pagination-container');
+        const currentPageNum = data.page || 1;
+        const hasMore = data.has_more || false;
+        
+        if (currentPageNum === 1 && !hasMore) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        let paginationHtml = '<div class="pagination">';
+        
+        // Previous button
+        if (currentPageNum > 1) {
+            paginationHtml += `<button onclick="changePage(${currentPageNum - 1})">Previous</button>`;
+        } else {
+            paginationHtml += `<button disabled>Previous</button>`;
+        }
+        
+        // Current page
+        paginationHtml += `<button class="active">${currentPageNum}</button>`;
+        
+        // Next button
+        if (hasMore) {
+            paginationHtml += `<button onclick="changePage(${currentPageNum + 1})">Next</button>`;
+        } else {
+            paginationHtml += `<button disabled>Next</button>`;
+        }
+        
+        paginationHtml += '</div>';
+        container.innerHTML = paginationHtml;
+    }
+    
+    function calculateSinceDate(sinceFilter) {
+        const now = new Date();
+        
+        switch (sinceFilter) {
+            case '1h':
+                return new Date(now.getTime() - 60 * 60 * 1000);
+            case '6h':
+                return new Date(now.getTime() - 6 * 60 * 60 * 1000);
+            case '24h':
+                return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            case '7d':
+                return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            default:
+                return null;
+        }
+    }
+    
+    function applyFilters() {
+        currentPage = 1;
+        loadLogs();
+    }
+    
+    function clearFilters() {
+        document.getElementById('filter-level').value = '';
+        document.getElementById('filter-since').value = '24h';
+        document.getElementById('filter-limit').value = '100';
+        currentPage = 1;
+        loadLogs();
+    }
+    
+    function toggleAutoRefresh() {
+        const button = document.getElementById('auto-refresh-toggle');
+        
+        if (isAutoRefreshActive) {
+            // Stop auto refresh
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+            isAutoRefreshActive = false;
+            button.textContent = 'Auto Refresh: OFF';
+            button.classList.remove('auto-refresh-active');
+        } else {
+            // Start auto refresh
+            autoRefreshInterval = setInterval(loadLogs, 10000); // Refresh every 10 seconds
+            isAutoRefreshActive = true;
+            button.textContent = 'Auto Refresh: ON';
+            button.classList.add('auto-refresh-active');
+        }
+    }
+    
+    // Global functions
+    window.changePage = function(page) {
+        if (page < 1) return;
+        currentPage = page;
+        loadLogs();
+    };
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+        }
+    });
+});
+</script>
+{% endblock %}

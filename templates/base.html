@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Audio Stream Recorder{% endblock %}</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center" style="width: 100%;">
+                <a href="{{ url_for('main.dashboard') }}" class="navbar-brand">
+                    Audio Stream Recorder
+                </a>
+                
+                <ul class="navbar-nav">
+                    <li><a href="{{ url_for('main.dashboard') }}" class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}">Dashboard</a></li>
+                    <li><a href="{{ url_for('main.streams') }}" class="nav-link {% if request.endpoint in ['main.streams', 'main.new_stream', 'main.edit_stream'] %}active{% endif %}">Streams</a></li>
+                    <li><a href="{{ url_for('main.schedules') }}" class="nav-link {% if request.endpoint in ['main.schedules', 'main.new_schedule', 'main.edit_schedule'] %}active{% endif %}">Schedules</a></li>
+                    <li><a href="{{ url_for('main.sessions') }}" class="nav-link {% if request.endpoint == 'main.sessions' %}active{% endif %}">Sessions</a></li>
+                    <li><a href="{{ url_for('main.logs') }}" class="nav-link {% if request.endpoint == 'main.logs' %}active{% endif %}">Logs</a></li>
+                    <li><a href="{{ url_for('main.backup') }}" class="nav-link {% if request.endpoint == 'main.backup' %}active{% endif %}">Backup</a></li>
+                    <li><a href="{{ url_for('main.settings') }}" class="nav-link {% if request.endpoint == 'main.settings' %}active{% endif %}">Settings</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Alert Container -->
+    <div id="alert-container"></div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer style="background-color: var(--light-color); padding: 1rem 0; margin-top: 2rem; border-top: 1px solid var(--border-color);">
+        <div class="container text-center">
+            <small class="text-muted">Audio Stream Recorder v1.0.0</small>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
