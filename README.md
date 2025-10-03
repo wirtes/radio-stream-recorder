@@ -45,7 +45,7 @@ A containerized Python application for automated recording, processing, and dist
 
 5. **Start the application:**
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 6. **Access the web interface:**
@@ -282,7 +282,7 @@ DELETE /api/backup/delete           # Delete backup
 **Problem**: Container exits immediately or fails to start
 
 **Solutions**:
-1. Check Docker logs: `docker-compose logs audio-recorder`
+1. Check Docker logs: `docker compose logs audio-recorder`
 2. Verify volume permissions: `chmod -R 755 data recordings logs artwork config`
 3. Ensure required directories exist: `mkdir -p data recordings logs artwork config`
 4. Check port availability: `netstat -tulpn | grep 8666`
@@ -312,7 +312,7 @@ DELETE /api/backup/delete           # Delete backup
 **Problem**: Cannot access web interface
 
 **Solutions**:
-1. Check container status: `docker-compose ps`
+1. Check container status: `docker compose ps`
 2. Verify port mapping: `docker port <container> 8666`
 3. Check firewall settings
 4. Try accessing via container IP: `docker inspect <container> | grep IPAddress`
@@ -390,7 +390,7 @@ cd audio-stream-recorder
 docker build -t audio-stream-recorder .
 
 # Run development container
-docker-compose -f docker-compose.yml up
+docker compose -f docker-compose.yml up
 ```
 
 ### Running Tests

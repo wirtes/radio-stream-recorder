@@ -32,20 +32,26 @@ class JobManager:
     Provides high-level operations for job creation, updating, and monitoring.
     """
     
-    def __init__(self, scheduler_service: SchedulerService):
+    def __init__(self, scheduler_service: SchedulerService, db_manager=None):
         """
         Initialize JobManager.
         
         Args:
             scheduler_service: SchedulerService instance
+            db_manager: Database manager instance for repositories
         """
         self.scheduler_service = scheduler_service
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         
+        # Get database manager if not provided
+        if db_manager is None:
+            from src.models.database import get_db_manager
+            db_manager = get_db_manager()
+        
         # Repositories
-        self.schedule_repo = ScheduleRepository()
-        self.session_repo = SessionRepository()
-        self.config_repo = ConfigurationRepository()
+        self.schedule_repo = ScheduleRepository(db_manager)
+        self.session_repo = SessionRepository(db_manager)
+        self.config_repo = ConfigurationRepository(db_manager)
         
         self.logger.info("JobManager initialized")
     

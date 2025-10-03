@@ -1,8 +1,6 @@
 # Audio Stream Recorder - Docker Compose Configuration
 # Copy this file to docker-compose.yml and customize as needed
 
-version: '3.8'
-
 services:
   audio-recorder:
     build: .

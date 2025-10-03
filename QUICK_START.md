@@ -129,7 +129,7 @@ ssh -i config/ssh_key user@your-server.com
 
 # Verify Docker is running
 docker --version
-docker-compose --version
+docker compose version
 
 # Check port availability
 netstat -tulpn | grep 8666

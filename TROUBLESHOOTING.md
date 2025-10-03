@@ -21,7 +21,7 @@ This guide covers common issues and their solutions for the Audio Stream Recorde
 
 **Symptoms:**
 - Container exits immediately after starting
-- `docker-compose up` shows error messages
+- `docker compose up` shows error messages
 - Container status shows "Exited (1)"
 
 **Common Causes & Solutions:**
@@ -47,7 +47,17 @@ This guide covers common issues and their solutions for the Audio Stream Recorde
    mkdir -p data recordings logs artwork config
    ```
 
-4. **Invalid Environment Variables**
+4. **Docker Permission Issues**
+   ```bash
+   # Add user to docker group
+   sudo usermod -aG docker $USER
+   newgrp docker
+   
+   # Test Docker access
+   docker ps
+   ```
+
+5. **Invalid Environment Variables**
    ```bash
    # Check .env file syntax
    cat .env | grep -v '^#' | grep '='
@@ -60,10 +70,10 @@ This guide covers common issues and their solutions for the Audio Stream Recorde
 **Debugging Steps:**
 ```bash
 # View container logs
-docker-compose logs audio-recorder
+docker compose logs audio-recorder
 
 # Check container status
-docker-compose ps
+docker compose ps
 
 # Inspect container configuration
 docker inspect audio-stream-recorder
@@ -73,7 +83,7 @@ docker inspect audio-stream-recorder
 
 **Check the logs for specific error messages:**
 ```bash
-docker-compose logs --tail=50 audio-recorder
+docker compose logs --tail=50 audio-recorder
 ```
 
 **Common Issues:**
@@ -211,8 +221,8 @@ docker-compose logs --tail=50 audio-recorder
 
 1. **Check Container Status**
    ```bash
-   docker-compose ps
-   docker-compose logs audio-recorder
+   docker compose ps
+   docker compose logs audio-recorder
    ```
 
 2. **Verify Port Mapping**
@@ -562,8 +572,8 @@ docker exec -it audio-stream-recorder ping 8.8.8.8
 If you're still experiencing issues after following this guide:
 
 1. **Collect Information:**
-   - Container logs: `docker-compose logs audio-recorder > logs.txt`
-   - System information: `docker version`, `docker-compose version`
+   - Container logs: `docker compose logs audio-recorder > logs.txt`
+   - System information: `docker version`, `docker compose version`
    - Configuration: `cat .env` (remove sensitive information)
    - Error messages and steps to reproduce
 
@@ -605,7 +615,7 @@ If you're still experiencing issues after following this guide:
 4. **Update Dependencies:**
    ```bash
    # Rebuild container with latest base image
-   docker-compose build --no-cache
+   docker compose build --no-cache
    ```
 
 ### Monitoring Setup

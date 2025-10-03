@@ -11,7 +11,8 @@ import os
 from src.web.models import (
     StreamConfigurationCreate, StreamConfigurationUpdate, StreamConfigurationResponse,
     RecordingScheduleCreate, RecordingScheduleUpdate, RecordingScheduleResponse,
-    RecordingSessionResponse, SystemStatusResponse, LogResponse, ErrorResponse
+    RecordingSessionResponse, SystemStatusResponse, LogResponse, ErrorResponse,
+    ConfigurationImport
 )
 from src.web.utils import validate_json, handle_validation_error
 
@@ -941,75 +942,7 @@ def get_logs():
             'error': str(e),
             'logs': [],
             'count': 0
-        }), 500 filename.endswith('.log'):
-                        log_files.append(os.path.join(log_dir, filename))
-            
-            # Read recent log entries (simplified)
-            for log_file in sorted(log_files, reverse=True)[:3]:  # Last 3 log files
-                try:
-                    with open(log_file, 'r') as f:
-                        lines = f.readlines()[-1000:]  # Last 1000 lines
-                        
-                    for line in reversed(lines):
-                        if len(log_entries) >= limit + offset:
-                            break
-                            
-                        line = line.strip()
-                        if not line:
-                            continue
-                            
-                        # Parse log line (simplified format)
-                        try:
-                            parts = line.split(' - ', 3)
-                            if len(parts) >= 4:
-                                timestamp_str = parts[0]
-                                logger_name = parts[1]
-                                log_level = parts[2]
-                                message = parts[3]
-                                
-                                # Parse timestamp
-                                log_timestamp = datetime.fromisoformat(timestamp_str.replace(',', '.'))
-                                
-                                # Apply filters
-                                if level and log_level != level:
-                                    continue
-                                    
-                                if since_date and log_timestamp < since_date:
-                                    continue
-                                
-                                log_entries.append({
-                                    'timestamp': log_timestamp.isoformat(),
-                                    'level': log_level,
-                                    'logger': logger_name,
-                                    'message': message
-                                })
-                        except (ValueError, IndexError):
-                            # Skip malformed log lines
-                            continue
-                            
-                except (IOError, OSError):
-                    continue
-                    
-        except Exception as e:
-            logger.warning(f"Error reading log files: {str(e)}")
-        
-        # Apply pagination
-        total_count = len(log_entries)
-        paginated_entries = log_entries[offset:offset + limit]
-        
-        return jsonify({
-            'logs': paginated_entries,
-            'total_count': total_count,
-            'page': page,
-            'per_page': limit,
-            'has_more': offset + limit < total_count
-        })
-        
-    except BadRequest:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting logs: {str(e)}")
-        raise InternalServerError(f"Failed to retrieve logs: {str(e)}")
+        }), 500
 
 
 @api_bp.route('/sessions')
@@ -1166,9 +1099,10 @@ def health_check_detailed():
         
         # Check database connectivity
         try:
+            from sqlalchemy import text
             db_manager = DatabaseManager()
             with db_manager.get_session() as session:
-                session.execute('SELECT 1')
+                session.execute(text('SELECT 1'))
             health_status['checks']['database'] = {'status': 'healthy', 'message': 'Database connection OK'}
         except Exception as e:
             health_status['checks']['database'] = {'status': 'unhealthy', 'message': f'Database error: {str(e)}'}
@@ -1240,8 +1174,8 @@ def health_check_detailed():
         }), 503
 
 
-@api_bp.route('/system/metrics')
-def get_system_metrics():
+@api_bp.route('/system/metrics/detailed')
+def get_detailed_system_metrics():
     """Get detailed system metrics."""
     try:
         import psutil
@@ -1430,8 +1364,7 @@ def import_stream_configurations(data: ConfigurationImport):
         logger.error(f"Error importing configurations: {str(e)}")
         raise InternalServerError(f"Failed to import configurations: {str(e)}")
 
-# Con
-figuration Backup and Restore API endpoints
+# Configuration Backup and Restore API endpoints
 @api_bp.route('/backup/create', methods=['POST'])
 def create_backup():
     """Create a configuration backup."""

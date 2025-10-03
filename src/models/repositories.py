@@ -458,8 +458,9 @@ class SessionRepository(BaseRepository):
                 "failed_sessions": failed_sessions,
                 "active_sessions": active_sessions,
                 "success_rate": round((completed_sessions / total_sessions * 100) if total_sessions > 0 else 0, 2)
-            }    de
-f get_recent_sessions_for_schedule(self, schedule_id: int, limit: int = 10) -> List[RecordingSession]:
+            }
+
+    def get_recent_sessions_for_schedule(self, schedule_id: int, limit: int = 10) -> List[RecordingSession]:
         """Get recent recording sessions for a specific schedule."""
         with self.get_session() as session:
             return session.query(RecordingSession)\

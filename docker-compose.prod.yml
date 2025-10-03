@@ -1,8 +1,6 @@
 # Audio Stream Recorder - Production Configuration
 # Optimized for production deployment with enhanced monitoring and resource management
 
-version: '3.8'
-
 services:
   audio-stream-recorder:
     build: .

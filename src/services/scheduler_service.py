@@ -30,20 +30,26 @@ class SchedulerService:
     Provides cron expression parsing, job scheduling, and persistence.
     """
     
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: Optional[str] = None, db_manager=None):
         """
         Initialize SchedulerService.
         
         Args:
             database_url: Database URL for job persistence (defaults to config.DATABASE_URL)
+            db_manager: Database manager instance for repositories
         """
         self.database_url = database_url or config.DATABASE_URL
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         
+        # Get database manager if not provided
+        if db_manager is None:
+            from src.models.database import get_db_manager
+            db_manager = get_db_manager()
+        
         # Repositories
-        self.schedule_repo = ScheduleRepository()
-        self.session_repo = SessionRepository()
-        self.config_repo = ConfigurationRepository()
+        self.schedule_repo = ScheduleRepository(db_manager)
+        self.session_repo = SessionRepository(db_manager)
+        self.config_repo = ConfigurationRepository(db_manager)
         
         # Active recording sessions tracking
         self.active_sessions: Dict[int, Any] = {}  # session_id -> RecordingSessionManager

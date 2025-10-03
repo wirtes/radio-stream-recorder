@@ -73,8 +73,7 @@ def not_found(error):
     return render_template('error.html', 
                          error={'name': 'Page Not Found', 
                                'description': 'The requested page could not be found.'}), 404
-@main
-_bp.route('/backup')
+@main_bp.route('/backup')
 def backup():
     """Configuration backup and restore page."""
     return render_template('backup.html')

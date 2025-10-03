@@ -38,6 +38,9 @@ COPY src/ ./src/
 COPY templates/ ./templates/
 COPY static/ ./static/
 
+# Add the app directory to Python path
+ENV PYTHONPATH="/app:$PYTHONPATH"
+
 # Create directories for volumes with proper permissions
 RUN mkdir -p /app/data /app/recordings /app/config /app/logs /app/artwork \
     && chown -R appuser:appuser /app

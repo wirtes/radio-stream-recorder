@@ -31,7 +31,8 @@ class WorkflowCoordinator:
         self,
         scheduler_service: SchedulerService,
         transfer_queue: TransferQueue,
-        logging_service: Optional[Any] = None
+        logging_service: Optional[Any] = None,
+        db_manager=None
     ):
         """
         Initialize WorkflowCoordinator.
@@ -40,14 +41,20 @@ class WorkflowCoordinator:
             scheduler_service: Scheduler service instance
             transfer_queue: Transfer queue service instance
             logging_service: Logging service instance (optional)
+            db_manager: Database manager instance (optional)
         """
         self.scheduler_service = scheduler_service
         self.transfer_queue = transfer_queue
         self.logging_service = logging_service
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         
+        # Get database manager if not provided
+        if db_manager is None:
+            from src.models.database import get_db_manager
+            db_manager = get_db_manager()
+        
         # Repositories
-        self.db_manager = DatabaseManager()
+        self.db_manager = db_manager
         self.session_repo = SessionRepository(self.db_manager)
         self.config_repo = ConfigurationRepository(self.db_manager)
         

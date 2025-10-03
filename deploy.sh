@@ -54,12 +54,33 @@ check_docker() {
         exit 1
     fi
     
-    if ! command -v docker-compose &> /dev/null; then
+    if ! command -v docker compose &> /dev/null; then
         print_error "Docker Compose is not installed. Please install Docker Compose first."
         exit 1
     fi
     
-    print_status "Docker and Docker Compose are installed"
+    # Check Docker daemon access
+    if ! docker info &> /dev/null; then
+        print_error "Cannot connect to Docker daemon. This usually means:"
+        print_error "1. Docker daemon is not running, or"
+        print_error "2. Your user doesn't have permission to access Docker"
+        print_error ""
+        print_error "To fix permission issues, run:"
+        print_error "  sudo usermod -aG docker \$USER"
+        print_error "  newgrp docker"
+        print_error ""
+        print_error "Then try again."
+        exit 1
+    fi
+    
+    # Additional check: try to run a simple docker command
+    if ! docker version &> /dev/null; then
+        print_error "Docker permission issue detected."
+        print_error "Run: sudo usermod -aG docker \$USER && newgrp docker"
+        exit 1
+    fi
+    
+    print_status "Docker and Docker Compose are installed and accessible"
 }
 
 # Create required directories
@@ -102,17 +123,17 @@ deploy() {
     fi
     
     print_status "Building Docker image..."
-    docker-compose -f "$compose_file" build
+    docker compose -f "$compose_file" build
     
     print_status "Starting Audio Stream Recorder..."
-    docker-compose -f "$compose_file" up -d
+    docker compose -f "$compose_file" up -d
     
     # Wait for health check
     print_status "Waiting for application to start..."
     sleep 10
     
     # Check if container is running
-    if docker-compose -f "$compose_file" ps | grep -q "Up"; then
+    if docker compose -f "$compose_file" ps | grep -q "Up"; then
         print_status "Audio Stream Recorder is running successfully!"
         
         # Get the port from environment or default
@@ -122,10 +143,10 @@ deploy() {
         
         # Show logs
         print_status "Recent logs:"
-        docker-compose -f "$compose_file" logs --tail=20
+        docker compose -f "$compose_file" logs --tail=20
     else
         print_error "Failed to start Audio Stream Recorder"
-        docker-compose -f "$compose_file" logs
+        docker compose -f "$compose_file" logs
         exit 1
     fi
 }
@@ -139,7 +160,7 @@ stop() {
     fi
     
     print_status "Stopping Audio Stream Recorder..."
-    docker-compose -f "$compose_file" down
+    docker compose -f "$compose_file" down
     print_status "Audio Stream Recorder stopped"
 }
 
@@ -286,11 +307,11 @@ update() {
     fi
     
     print_status "Rebuilding container..."
-    docker-compose -f "$compose_file" build --no-cache
+    docker compose -f "$compose_file" build --no-cache
     
     print_status "Restarting services..."
-    docker-compose -f "$compose_file" down
-    docker-compose -f "$compose_file" up -d
+    docker compose -f "$compose_file" down
+    docker compose -f "$compose_file" up -d
     
     # Health check after update
     if health_check; then
@@ -332,7 +353,7 @@ detailed_status() {
     
     # Container status
     print_status "Container Status:"
-    docker-compose -f "$compose_file" ps
+    docker compose -f "$compose_file" ps
     echo ""
     
     # Resource usage
@@ -360,7 +381,7 @@ detailed_status() {
     
     # Recent logs
     print_status "Recent Logs (last 10 lines):"
-    docker-compose -f "$compose_file" logs --tail=10 2>/dev/null || echo "No logs available"
+    docker compose -f "$compose_file" logs --tail=10 2>/dev/null || echo "No logs available"
 }
 
 # Install function for first-time setup
@@ -476,9 +497,9 @@ case "$1" in
         fi
         
         if [ "$2" = "-f" ] || [ "$3" = "-f" ] || [ "$2" = "--follow" ] || [ "$3" = "--follow" ]; then
-            docker-compose -f "$compose_file" logs -f
+            docker compose -f "$compose_file" logs -f
         else
-            docker-compose -f "$compose_file" logs --tail=50
+            docker compose -f "$compose_file" logs --tail=50
         fi
         ;;
     status)
@@ -486,7 +507,7 @@ case "$1" in
         if [ "$2" = "prod" ]; then
             compose_file="docker-compose.prod.yml"
         fi
-        docker-compose -f "$compose_file" ps
+        docker compose -f "$compose_file" ps
         ;;
     detailed-status)
         detailed_status "$2"

@@ -63,6 +63,13 @@ def create_tables():
     _db_manager.create_tables()
 
 
+def get_db_manager():
+    """Get the database manager instance."""
+    if _db_manager is None:
+        raise RuntimeError("Database not initialized. Call init_db() first.")
+    return _db_manager
+
+
 def get_db_session():
     """Get a database session context manager."""
     if _db_manager is None:

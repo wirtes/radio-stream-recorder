@@ -58,11 +58,11 @@ fi
 
 # Check Docker Compose
 print_check "Checking Docker Compose installation..."
-if command -v docker-compose &> /dev/null; then
-    compose_version=$(docker-compose --version | cut -d' ' -f3 | cut -d',' -f1)
+if docker compose version &> /dev/null; then
+    compose_version=$(docker compose version --short 2>/dev/null || docker compose version | head -1 | cut -d' ' -f4)
     print_pass "Docker Compose installed (version $compose_version)"
 else
-    print_error "Docker Compose is not installed or not in PATH"
+    print_error "Docker Compose is not installed or not available"
 fi
 
 # Check Docker daemon
@@ -251,16 +251,16 @@ fi
 print_check "Validating Docker Compose configuration..."
 
 if [ -f "docker-compose.yml" ]; then
-    if docker-compose -f docker-compose.yml config &> /dev/null; then
+    if docker compose -f docker-compose.yml config &> /dev/null; then
         print_pass "docker-compose.yml syntax is valid"
     else
         print_error "docker-compose.yml has syntax errors"
-        print_info "Run: docker-compose -f docker-compose.yml config"
+        print_info "Run: docker compose -f docker-compose.yml config"
     fi
 fi
 
 if [ -f "docker-compose.prod.yml" ]; then
-    if docker-compose -f docker-compose.prod.yml config &> /dev/null; then
+    if docker compose -f docker-compose.prod.yml config &> /dev/null; then
         print_pass "docker-compose.prod.yml syntax is valid"
     else
         print_error "docker-compose.prod.yml has syntax errors"

@@ -115,8 +115,11 @@ def initialize_scheduler():
     """Initialize and start the scheduler service with proper registration."""
     try:
         from src.services.scheduler_service import SchedulerService
+        from src.models.database import get_db_manager
         
-        scheduler_service = SchedulerService()
+        # Get the database manager instance
+        db_manager = get_db_manager()
+        scheduler_service = SchedulerService(db_manager=db_manager)
         scheduler_service.start()
         
         # Register scheduler service
@@ -149,8 +152,9 @@ def create_web_app():
             try:
                 # Check database connection
                 from src.models.database import get_db_session
+                from sqlalchemy import text
                 with get_db_session() as session:
-                    session.execute("SELECT 1")
+                    session.execute(text("SELECT 1"))
                 
                 # Check service statuses using service container
                 scheduler_service = service_container.get_service('scheduler')
@@ -301,8 +305,12 @@ def initialize_workflow_services():
         
         # Initialize job manager with service dependencies
         from src.services.job_manager import JobManager
+        from src.models.database import get_db_manager
+        
+        db_manager = get_db_manager()
         job_manager = JobManager(
-            scheduler_service=service_container.get_service('scheduler')
+            scheduler_service=service_container.get_service('scheduler'),
+            db_manager=db_manager
         )
         
         service_container.register_service('job_manager', job_manager)
@@ -312,7 +320,8 @@ def initialize_workflow_services():
         workflow_coordinator = WorkflowCoordinator(
             scheduler_service=service_container.get_service('scheduler'),
             transfer_queue=transfer_queue,
-            logging_service=service_container.get_service('logging')
+            logging_service=service_container.get_service('logging'),
+            db_manager=db_manager
         )
         
         service_container.register_service(

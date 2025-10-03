@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   audio-stream-recorder:
     build: .
@@ -37,7 +35,7 @@ services:
       - MEMORY_CRITICAL_THRESHOLD=${MEMORY_CRITICAL_THRESHOLD:-90.0}
       
       # Database configuration
-      - DATABASE_URL=sqlite:///app/data/audio_recorder.db
+      - DATABASE_URL=sqlite:////app/data/audio_recorder.db
       
       # Optional timezone configuration
       - TZ=${TZ:-UTC}
