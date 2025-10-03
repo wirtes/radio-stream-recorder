@@ -333,7 +333,11 @@ def test_stream_url():
         stream_url = data['stream_url']
         
         from src.services.stream_recorder import StreamRecorder
-        recorder = StreamRecorder()
+        # Create a temporary recorder instance for testing
+        recorder = StreamRecorder(
+            stream_url="temp://test",  # Temporary URL, will be overridden
+            output_path="/tmp/test.mp3"  # Temporary path, not used for testing
+        )
         test_result = recorder.test_stream_connection(stream_url)
         
         return jsonify({

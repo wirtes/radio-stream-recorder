@@ -186,6 +186,44 @@ class StreamRecorder:
             self.error_message = f"RTMP test error: {str(e)}"
             return False
     
+    def test_stream_connection(self, stream_url: str) -> dict:
+        """
+        Test a stream URL connection without creating a full recorder instance.
+        
+        Args:
+            stream_url: The stream URL to test
+            
+        Returns:
+            Dictionary with test results
+        """
+        try:
+            # Temporarily set the stream URL for testing
+            original_url = self.stream_url
+            self.stream_url = stream_url
+            
+            # Run validation
+            is_valid = self.validate_stream_url()
+            
+            # Restore original URL
+            self.stream_url = original_url
+            
+            if is_valid:
+                return {
+                    'success': True,
+                    'message': 'Stream URL is valid and accessible'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': self.error_message or 'Stream URL validation failed'
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Test failed: {str(e)}'
+            }
+    
     def start_recording(self) -> bool:
         """
         Start recording the audio stream.
