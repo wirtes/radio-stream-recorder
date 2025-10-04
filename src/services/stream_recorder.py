@@ -282,7 +282,8 @@ class StreamRecorder:
             config.FFMPEG_PATH,
             '-y',  # Overwrite output file
             '-i', self.stream_url,
-            '-c', 'copy',  # Copy streams without re-encoding when possible
+            '-acodec', 'libmp3lame',  # Use MP3 encoder for audio
+            '-ab', '128k',  # Audio bitrate
             '-f', 'mp3',   # Force MP3 output format
         ]
         

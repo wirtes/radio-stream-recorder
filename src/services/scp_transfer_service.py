@@ -115,18 +115,15 @@ class SCPTransferService:
     
     def _get_default_private_key_path(self) -> Optional[str]:
         """Get default SSH private key path."""
-        # Look for common SSH key files in the SSH config directory
-        key_files = ['id_rsa', 'id_ed25519', 'id_ecdsa']
+        # Use the specific id_ed25519 key from config directory
+        key_path = os.path.join(config.SSH_CONFIG_DIR, 'id_ed25519')
+        if os.path.exists(key_path):
+            return key_path
         
+        # Fallback to other keys in config directory
+        key_files = ['ssh_key', 'id_rsa', 'id_ecdsa']
         for key_file in key_files:
             key_path = os.path.join(config.SSH_CONFIG_DIR, key_file)
-            if os.path.exists(key_path):
-                return key_path
-        
-        # Fallback to user's SSH directory
-        ssh_dir = os.path.expanduser('~/.ssh')
-        for key_file in key_files:
-            key_path = os.path.join(ssh_dir, key_file)
             if os.path.exists(key_path):
                 return key_path
         
@@ -160,9 +157,28 @@ class SCPTransferService:
         # Use private key if available, otherwise password
         if scp_config.private_key_path and os.path.exists(scp_config.private_key_path):
             try:
-                private_key = paramiko.RSAKey.from_private_key_file(scp_config.private_key_path)
-                auth_kwargs['pkey'] = private_key
-                self.logger.debug(f"Using private key: {scp_config.private_key_path}")
+                # Try to load key with different key types
+                private_key = None
+                key_types = [
+                    paramiko.Ed25519Key,
+                    paramiko.RSAKey,
+                    paramiko.ECDSAKey,
+                    paramiko.DSSKey
+                ]
+                
+                for key_type in key_types:
+                    try:
+                        private_key = key_type.from_private_key_file(scp_config.private_key_path)
+                        self.logger.debug(f"Successfully loaded {key_type.__name__} from: {scp_config.private_key_path}")
+                        break
+                    except Exception:
+                        continue
+                
+                if private_key:
+                    auth_kwargs['pkey'] = private_key
+                else:
+                    raise Exception("Unable to load private key with any supported key type")
+                    
             except Exception as e:
                 self.logger.warning(f"Failed to load private key {scp_config.private_key_path}: {e}")
                 if scp_config.password:
@@ -196,6 +212,7 @@ class SCPTransferService:
         """
         start_time = time.time()
         file_size = os.path.getsize(local_path)
+        bytes_transferred = 0  # Initialize to avoid UnboundLocalError in exception handlers
         
         try:
             client = self._create_ssh_client(scp_config)
@@ -206,12 +223,29 @@ class SCPTransferService:
                 
                 # Ensure remote directory exists
                 remote_dir = os.path.dirname(remote_path)
-                if remote_dir:
+                if remote_dir and remote_dir != '/':
                     try:
-                        scp.makedirs(remote_dir)
-                    except Exception:
-                        # Directory might already exist
-                        pass
+                        # Try to create directory structure recursively
+                        dirs_to_create = []
+                        current_dir = remote_dir
+                        while current_dir and current_dir != '/':
+                            try:
+                                scp.stat(current_dir)
+                                break  # Directory exists
+                            except FileNotFoundError:
+                                dirs_to_create.append(current_dir)
+                                current_dir = os.path.dirname(current_dir)
+                        
+                        # Create directories from parent to child
+                        for dir_path in reversed(dirs_to_create):
+                            try:
+                                scp.mkdir(dir_path)
+                            except Exception:
+                                # Directory might already exist or permission denied
+                                pass
+                    except Exception as e:
+                        self.logger.debug(f"Could not ensure remote directory exists: {e}")
+                        # Continue anyway, the put operation might still work
                 
                 # Transfer file with progress monitoring
                 bytes_transferred = 0
@@ -222,13 +256,22 @@ class SCPTransferService:
                     if progress_callback:
                         progress_callback(transferred, total)
                 
-                scp.put(local_path, remote_path, callback=progress_wrapper)
+                # If remote path ends with '/', append the local filename
+                if remote_path.endswith('/'):
+                    local_filename = os.path.basename(local_path)
+                    full_remote_path = remote_path + local_filename
+                else:
+                    full_remote_path = remote_path
+                
+                self.logger.debug(f"Starting SFTP transfer: {local_path} -> {full_remote_path}")
+                scp.put(local_path, full_remote_path, callback=progress_wrapper)
+                self.logger.debug(f"SFTP transfer completed successfully")
                 scp.close()
                 
                 transfer_time = time.time() - start_time
                 
                 self.logger.info(
-                    f"Successfully transferred {local_path} to {scp_config.username}@{scp_config.hostname}:{remote_path} "
+                    f"Successfully transferred {local_path} to {scp_config.username}@{scp_config.hostname}:{full_remote_path} "
                     f"({file_size} bytes in {transfer_time:.2f}s)"
                 )
                 
@@ -266,7 +309,12 @@ class SCPTransferService:
             
         except Exception as e:
             error_msg = f"Unexpected error during transfer: {str(e)}"
-            self.logger.error(error_msg)
+            self.logger.error(f"{error_msg} (Type: {type(e).__name__})")
+            self.logger.error(f"Local path: {local_path}")
+            self.logger.error(f"Remote path: {remote_path}")
+            self.logger.error(f"File size: {file_size} bytes")
+            import traceback
+            self.logger.error(f"Full traceback: {traceback.format_exc()}")
             return TransferResult(
                 success=False,
                 status=TransferStatus.FAILED,
@@ -308,6 +356,7 @@ class SCPTransferService:
         else:
             try:
                 scp_config, remote_path = self.parse_scp_destination(scp_destination)
+                self.logger.debug(f"Parsed SCP destination: {scp_config.username}@{scp_config.hostname}:{remote_path}")
             except ValueError as e:
                 return TransferResult(
                     success=False,

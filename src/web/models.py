@@ -91,6 +91,7 @@ class RecordingScheduleCreate(BaseModel):
     cron_expression: str = Field(..., min_length=1)
     duration_minutes: int = Field(..., gt=0, le=1440)  # Max 24 hours
     max_retries: int = Field(default=3, ge=0, le=10)
+    is_active: bool = Field(default=True)
     
     @validator('cron_expression')
     def validate_cron_expression(cls, v):
@@ -115,6 +116,7 @@ class RecordingScheduleUpdate(BaseModel):
     duration_minutes: Optional[int] = Field(None, gt=0, le=1440)
     is_active: Optional[bool] = None
     max_retries: Optional[int] = Field(None, ge=0, le=10)
+    last_run_time: Optional[datetime] = None
     
     @validator('cron_expression')
     def validate_cron_expression(cls, v):

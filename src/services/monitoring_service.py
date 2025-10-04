@@ -225,7 +225,7 @@ class MonitoringService:
         uptime_seconds = time.time() - self.start_time
         
         return SystemMetrics(
-            timestamp=datetime.utcnow().isoformat() + 'Z',
+            timestamp=datetime.now().isoformat(),
             cpu_percent=cpu_percent,
             memory_percent=memory_percent,
             memory_used_mb=memory_used_mb,
@@ -240,7 +240,7 @@ class MonitoringService:
         
     def _perform_health_checks(self, metrics: SystemMetrics):
         """Perform health checks based on current metrics."""
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now().isoformat()
         
         # Disk space health check
         if metrics.disk_percent >= self.disk_critical_threshold:
@@ -430,7 +430,7 @@ class MonitoringService:
             return {
                 'status': HealthStatus.UNKNOWN.value,
                 'message': 'Health status not available',
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now().isoformat(),
                 'components': {}
             }
             

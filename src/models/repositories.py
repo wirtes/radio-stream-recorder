@@ -33,7 +33,12 @@ class ConfigurationRepository(BaseRepository):
         """Create a new stream configuration."""
         with self.get_session() as session:
             try:
-                db_config = StreamConfiguration(**config_data.dict())
+                # Use Pydantic's json serialization to properly convert types
+                data_dict = config_data.dict()
+                # Ensure stream_url is converted to string
+                data_dict['stream_url'] = str(config_data.stream_url)
+                
+                db_config = StreamConfiguration(**data_dict)
                 session.add(db_config)
                 session.commit()
                 session.refresh(db_config)
@@ -72,10 +77,15 @@ class ConfigurationRepository(BaseRepository):
                     return None
                 
                 update_data = config_data.dict(exclude_unset=True)
+                # Handle URL conversion for updates
+                if 'stream_url' in update_data and hasattr(config_data, 'stream_url') and config_data.stream_url is not None:
+                    update_data['stream_url'] = str(config_data.stream_url)
+                
                 for field, value in update_data.items():
                     setattr(db_config, field, value)
                 
-                db_config.updated_at = datetime.utcnow()
+                from ..utils.timezone_utils import get_local_now
+                db_config.updated_at = get_local_now()
                 session.commit()
                 session.refresh(db_config)
                 return db_config
@@ -167,7 +177,9 @@ class ScheduleRepository(BaseRepository):
     def get_active_schedules(self) -> List[RecordingSchedule]:
         """Get all active recording schedules."""
         with self.get_session() as session:
+            from sqlalchemy.orm import joinedload
             return session.query(RecordingSchedule)\
+                         .options(joinedload(RecordingSchedule.stream_config))\
                          .filter(RecordingSchedule.is_active == True)\
                          .order_by(RecordingSchedule.next_run_time.asc())\
                          .all()
@@ -199,7 +211,7 @@ class ScheduleRepository(BaseRepository):
                 if 'cron_expression' in update_data:
                     db_schedule.update_next_run_time()
                 
-                db_schedule.updated_at = datetime.utcnow()
+                db_schedule.updated_at = datetime.now()
                 session.commit()
                 session.refresh(db_schedule)
                 return db_schedule
@@ -227,6 +239,14 @@ class ScheduleRepository(BaseRepository):
             if active_sessions > 0:
                 raise ValueError("Cannot delete schedule with active recording sessions")
             
+            # Check if there are any completed/failed sessions that reference this schedule
+            total_sessions = session.query(RecordingSession)\
+                                  .filter(RecordingSession.schedule_id == schedule_id)\
+                                  .count()
+            
+            if total_sessions > 0:
+                raise ValueError(f"Cannot delete schedule: {total_sessions} recording sessions reference this schedule. Delete the sessions first or they will become orphaned.")
+            
             session.delete(db_schedule)
             session.commit()
             return True
@@ -239,7 +259,8 @@ class ScheduleRepository(BaseRepository):
                 return None
             
             db_schedule.update_next_run_time()
-            db_schedule.updated_at = datetime.utcnow()
+            from ..utils.timezone_utils import get_local_now
+            db_schedule.updated_at = get_local_now()
             session.commit()
             session.refresh(db_schedule)
             return db_schedule
@@ -252,7 +273,8 @@ class ScheduleRepository(BaseRepository):
                 return None
             
             db_schedule.retry_count += 1
-            db_schedule.updated_at = datetime.utcnow()
+            from ..utils.timezone_utils import get_local_now
+            db_schedule.updated_at = get_local_now()
             session.commit()
             session.refresh(db_schedule)
             return db_schedule
@@ -265,7 +287,8 @@ class ScheduleRepository(BaseRepository):
                 return None
             
             db_schedule.retry_count = 0
-            db_schedule.updated_at = datetime.utcnow()
+            from ..utils.timezone_utils import get_local_now
+            db_schedule.updated_at = get_local_now()
             session.commit()
             session.refresh(db_schedule)
             return db_schedule
@@ -353,7 +376,8 @@ class SessionRepository(BaseRepository):
                 for field, value in update_data.items():
                     setattr(db_session, field, value)
                 
-                db_session.updated_at = datetime.utcnow()
+                from ..utils.timezone_utils import get_local_now
+                db_session.updated_at = get_local_now()
                 session.commit()
                 session.refresh(db_session)
                 return db_session
@@ -373,10 +397,11 @@ class SessionRepository(BaseRepository):
                 db_session.error_message = error_message
             
             # Set end time if status is completed or failed
+            from ..utils.timezone_utils import get_local_now
             if status in [RecordingStatus.COMPLETED, RecordingStatus.FAILED]:
-                db_session.end_time = datetime.utcnow()
+                db_session.end_time = get_local_now()
             
-            db_session.updated_at = datetime.utcnow()
+            db_session.updated_at = get_local_now()
             session.commit()
             session.refresh(db_session)
             return db_session
@@ -392,7 +417,8 @@ class SessionRepository(BaseRepository):
             if error_message:
                 db_session.transfer_error_message = error_message
             
-            db_session.updated_at = datetime.utcnow()
+            from ..utils.timezone_utils import get_local_now
+            db_session.updated_at = get_local_now()
             session.commit()
             session.refresh(db_session)
             return db_session
@@ -405,7 +431,8 @@ class SessionRepository(BaseRepository):
                 return None
             
             db_session.update_file_info(file_path)
-            db_session.updated_at = datetime.utcnow()
+            from ..utils.timezone_utils import get_local_now
+            db_session.updated_at = get_local_now()
             session.commit()
             session.refresh(db_session)
             return db_session
@@ -428,7 +455,8 @@ class SessionRepository(BaseRepository):
     def get_recent_sessions(self, days: int = 7, limit: int = 50) -> List[RecordingSession]:
         """Get recent recording sessions within specified days."""
         with self.get_session() as session:
-            cutoff_date = datetime.utcnow() - timedelta(days=days)
+            from ..utils.timezone_utils import get_local_now
+            cutoff_date = get_local_now() - timedelta(days=days)
             return session.query(RecordingSession)\
                          .filter(RecordingSession.created_at >= cutoff_date)\
                          .order_by(RecordingSession.created_at.desc())\

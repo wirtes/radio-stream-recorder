@@ -69,9 +69,11 @@ class SchedulerService:
     def _setup_scheduler(self) -> None:
         """Set up APScheduler with persistence and thread pool."""
         try:
-            # Configure job store for persistence
+            # Use memory job store to avoid pickle issues
+            # Jobs will be reloaded from database on restart
+            from apscheduler.jobstores.memory import MemoryJobStore
             jobstores = {
-                'default': SQLAlchemyJobStore(url=self.database_url, tablename='apscheduler_jobs')
+                'default': MemoryJobStore()
             }
             
             # Configure thread pool executor with concurrent recording limits
@@ -86,12 +88,14 @@ class SchedulerService:
                 'misfire_grace_time': 300  # 5 minutes grace time for missed jobs
             }
             
-            # Create scheduler
+            # Create scheduler with local timezone
+            from ..utils.timezone_utils import get_local_timezone
+            local_tz = get_local_timezone()
             self.scheduler = BackgroundScheduler(
                 jobstores=jobstores,
                 executors=executors,
                 job_defaults=job_defaults,
-                timezone='UTC'
+                timezone=local_tz
             )
             
             # Add event listeners
@@ -199,13 +203,18 @@ class SchedulerService:
             # Test with croniter
             croniter(cron_expression)
             
-            # Test with APScheduler CronTrigger
-            CronTrigger.from_crontab(cron_expression)
+            # Test with APScheduler CronTrigger using local timezone
+            from ..utils.timezone_utils import get_local_timezone
+            local_tz = get_local_timezone()
+            CronTrigger.from_crontab(cron_expression, timezone=local_tz)
             
             return True
             
         except Exception as e:
-            self.logger.debug(f"Invalid cron expression '{cron_expression}': {e}")
+            self.logger.error(f"Invalid cron expression '{cron_expression}': {e}")
+            self.logger.error(f"Exception type: {type(e).__name__}")
+            import traceback
+            self.logger.error(f"Full traceback: {traceback.format_exc()}")
             return False
     
     def calculate_next_run_time(self, cron_expression: str, base_time: Optional[datetime] = None) -> Optional[datetime]:
@@ -223,9 +232,19 @@ class SchedulerService:
             if not self.validate_cron_expression(cron_expression):
                 return None
             
-            base_time = base_time or datetime.now()
+            if base_time is None:
+                from ..utils.timezone_utils import get_local_now
+                base_time = get_local_now()
+            
             cron = croniter(cron_expression, base_time)
-            return cron.get_next(datetime)
+            next_run = cron.get_next(datetime)
+            
+            # Ensure the returned datetime is timezone-aware
+            if next_run.tzinfo is None:
+                from ..utils.timezone_utils import localize_datetime
+                next_run = localize_datetime(next_run)
+            
+            return next_run
             
         except Exception as e:
             self.logger.error(f"Failed to calculate next run time: {e}")
@@ -334,8 +353,19 @@ class SchedulerService:
             
             job_id = f"recording_schedule_{schedule.id}"
             
-            # Create cron trigger
-            trigger = CronTrigger.from_crontab(schedule.cron_expression, timezone='UTC')
+            # Create cron trigger with local timezone
+            from ..utils.timezone_utils import get_local_timezone
+            local_tz = get_local_timezone()
+            trigger = CronTrigger.from_crontab(schedule.cron_expression, timezone=local_tz)
+            
+            # Get stream config name for job naming
+            stream_name = "Unknown"
+            try:
+                stream_config = self.config_repo.get_by_id(schedule.stream_config_id)
+                if stream_config:
+                    stream_name = stream_config.name
+            except Exception:
+                pass  # Use default name if can't load stream config
             
             # Schedule job
             self.scheduler.add_job(
@@ -343,7 +373,7 @@ class SchedulerService:
                 trigger=trigger,
                 args=[schedule.id],
                 id=job_id,
-                name=f"Recording: {schedule.stream_config.name if schedule.stream_config else 'Unknown'}",
+                name=f"Recording: {stream_name}",
                 replace_existing=True
             )
             
@@ -413,20 +443,24 @@ class SchedulerService:
                 self.logger.warning(f"Maximum concurrent recordings reached, skipping schedule {schedule_id}")
                 return
             
-            # Create recording session
-            session = RecordingSession(
+            # Create recording session using Pydantic model
+            from src.models.recording_session import RecordingSessionCreate
+            session_data = RecordingSessionCreate(
                 schedule_id=schedule_id,
                 start_time=datetime.now(),
                 status=RecordingStatus.SCHEDULED
             )
             
             # Save session to database
-            session = self.session_repo.create(session)
+            session = self.session_repo.create(session_data)
             
             # Update schedule's last run time and next run time
-            schedule.last_run_time = datetime.now()
-            schedule.update_next_run_time()
-            self.schedule_repo.update(schedule)
+            from src.models.recording_schedule import RecordingScheduleUpdate
+            schedule_update = RecordingScheduleUpdate(
+                last_run_time=datetime.now()
+            )
+            # Update next run time will be handled by the repository
+            self.schedule_repo.update(schedule.id, schedule_update)
             
             # Start recording using callback
             if self.recording_start_callback:
@@ -442,14 +476,10 @@ class SchedulerService:
                 except Exception as e:
                     self.logger.error(f"Failed to start recording via callback: {e}")
                     # Update session status to failed
-                    session.status = RecordingStatus.FAILED
-                    session.error_message = str(e)
-                    self.session_repo.update(session)
+                    self.session_repo.update_status(session.id, RecordingStatus.FAILED, str(e))
             else:
                 self.logger.error("No recording start callback configured")
-                session.status = RecordingStatus.FAILED
-                session.error_message = "No recording start callback configured"
-                self.session_repo.update(session)
+                self.session_repo.update_status(session.id, RecordingStatus.FAILED, "No recording start callback configured")
             
         except Exception as e:
             self.logger.error(f"Error executing recording job for schedule {schedule_id}: {e}")

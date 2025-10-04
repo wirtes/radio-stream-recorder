@@ -77,20 +77,8 @@ class JobManager:
                 self.logger.error(f"Invalid cron expression: {job_data.cron_expression}")
                 return None
             
-            # Create schedule object
-            schedule = RecordingSchedule(
-                stream_config_id=job_data.stream_config_id,
-                cron_expression=job_data.cron_expression,
-                duration_minutes=job_data.duration_minutes,
-                is_active=job_data.is_active,
-                max_retries=job_data.max_retries
-            )
-            
-            # Calculate next run time
-            schedule.update_next_run_time()
-            
-            # Save to database
-            schedule = self.schedule_repo.create(schedule)
+            # Save to database using the repository
+            schedule = self.schedule_repo.create(job_data)
             
             # Add to scheduler if active
             if schedule.is_active:
@@ -98,8 +86,9 @@ class JobManager:
                 if not success:
                     self.logger.error(f"Failed to add schedule {schedule.id} to scheduler")
                     # Don't delete from database, just mark as inactive
-                    schedule.is_active = False
-                    self.schedule_repo.update(schedule)
+                    from src.models.recording_schedule import RecordingScheduleUpdate
+                    update_data = RecordingScheduleUpdate(is_active=False)
+                    self.schedule_repo.update(schedule.id, update_data)
             
             self.logger.info(f"Created job {schedule.id} for stream '{stream_config.name}'")
             return schedule

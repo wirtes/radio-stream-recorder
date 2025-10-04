@@ -504,20 +504,15 @@ def get_schedules():
 def create_schedule(data: RecordingScheduleCreate):
     """Create a new recording schedule."""
     try:
-        from src.models.database import DatabaseManager
-        from src.models.repositories import ScheduleRepository, ConfigurationRepository
+        # Get the job manager service which handles both database and scheduler
+        job_manager = get_service('job_manager')
+        if not job_manager:
+            raise InternalServerError("Job manager service not available")
         
-        db_manager = DatabaseManager()
-        schedule_repo = ScheduleRepository(db_manager)
-        config_repo = ConfigurationRepository(db_manager)
-        
-        # Validate that the stream configuration exists
-        stream_config = config_repo.get_by_id(data.stream_config_id)
-        if not stream_config:
-            raise BadRequest(f"Stream configuration with ID {data.stream_config_id} not found")
-        
-        # Create the schedule
-        schedule = schedule_repo.create(data)
+        # Create the schedule using JobManager (handles both DB and scheduler)
+        schedule = job_manager.create_job(data)
+        if not schedule:
+            raise InternalServerError("Failed to create recording schedule")
         
         # Convert to response model
         response_data = RecordingScheduleResponse.from_orm(schedule)
@@ -561,13 +556,13 @@ def get_schedule(schedule_id):
 def update_schedule(data: RecordingScheduleUpdate, schedule_id):
     """Update an existing recording schedule."""
     try:
-        from src.models.database import DatabaseManager
-        from src.models.repositories import ScheduleRepository
+        # Get the job manager service which handles both database and scheduler
+        job_manager = get_service('job_manager')
+        if not job_manager:
+            raise InternalServerError("Job manager service not available")
         
-        db_manager = DatabaseManager()
-        schedule_repo = ScheduleRepository(db_manager)
-        
-        schedule = schedule_repo.update(schedule_id, data)
+        # Update the schedule using JobManager (handles both DB and scheduler)
+        schedule = job_manager.update_job(schedule_id, data)
         if not schedule:
             raise NotFound(f"Recording schedule with ID {schedule_id} not found")
         
@@ -631,8 +626,9 @@ def validate_cron_expression():
                 'error': 'Invalid cron expression format'
             }), 400
         
-        # Calculate next few run times
-        base_time = datetime.utcnow()
+        # Calculate next few run times using local timezone
+        from src.utils.timezone_utils import get_local_now
+        base_time = get_local_now()
         cron = croniter(cron_expression, base_time)
         
         next_runs = []
@@ -768,7 +764,7 @@ def get_system_status():
             return jsonify({
                 'status': 'unknown',
                 'message': 'Monitoring service not available',
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now().isoformat(),
                 'active_recordings': 0
             })
         
@@ -815,7 +811,7 @@ def get_system_status():
         return jsonify({
             'status': 'unknown',
             'message': f'Error retrieving system status: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now().isoformat(),
             'uptime_seconds': 0,
             'active_recordings': 0,
             'total_recordings': 0,
@@ -842,7 +838,7 @@ def get_system_health():
         return jsonify({
             'status': 'unknown',
             'message': f'Error retrieving health status: {str(e)}',
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now().isoformat(),
             'components': {}
         }), 500
 
@@ -896,7 +892,7 @@ def get_current_metrics():
         logger.error(f"Error getting current metrics: {str(e)}")
         return jsonify({
             'error': str(e),
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now().isoformat()
         }), 500
 
 
@@ -1098,7 +1094,7 @@ def health_check_detailed():
         health_status = {
             'status': 'healthy',
             'checks': {},
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now().isoformat()
         }
         
         # Check database connectivity
@@ -1174,7 +1170,7 @@ def health_check_detailed():
         return jsonify({
             'status': 'unhealthy',
             'error': str(e),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now().isoformat()
         }), 503
 
 
@@ -1208,7 +1204,7 @@ def get_detailed_system_metrics():
             network_metrics = None
         
         metrics = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now().isoformat(),
             'cpu': {
                 'usage_percent': cpu_percent,
                 'count': cpu_count
@@ -1303,7 +1299,7 @@ def export_stream_configurations():
         export_data = ConfigurationExport(
             streams=[stream.dict() for stream in stream_responses],
             schedules=[schedule.dict() for schedule in schedule_responses],
-            exported_at=datetime.utcnow()
+            exported_at=datetime.now()
         )
         
         return jsonify(export_data.dict())

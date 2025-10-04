@@ -295,10 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><strong>${escapeHtml(streamName)}</strong></td>
-                <td>
-                    <span class="cron-expression">${escapeHtml(schedule.cron_expression)}</span>
-                    <button class="btn btn-sm btn-link" onclick="showCronHelper('${schedule.cron_expression}')">?</button>
-                </td>
+                <td>${formatScheduleTime(schedule.cron_expression)}</td>
                 <td>${schedule.duration_minutes} min</td>
                 <td>
                     <span class="schedule-status ${schedule.is_active ? 'status-active' : 'status-inactive'}">
@@ -306,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </span>
                 </td>
                 <td>${formatNextRun(schedule.next_run_time, schedule.is_active)}</td>
-                <td>${schedule.last_run_time ? new Date(schedule.last_run_time).toLocaleString() : 'Never'}</td>
+                <td>${formatLastRun(schedule.last_run_time)}</td>
                 <td>
                     <span class="${schedule.retry_count >= schedule.max_retries ? 'retry-count-high' : ''}">
                         ${schedule.retry_count}/${schedule.max_retries}
@@ -319,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             `<button class="btn btn-sm btn-success" onclick="toggleSchedule(${schedule.id}, true)">Activate</button>`
                         }
                         <a href="/schedules/${schedule.id}/edit" class="btn btn-sm btn-secondary">Edit</a>
-                        <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${schedule.id}, '${escapeHtml(streamName)}')">Delete</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${schedule.id}, '${escapeHtml(streamName)}', this)">Delete</button>
                     </div>
                 </td>
             `;
@@ -330,6 +327,41 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('no-schedules').style.display = 'none';
     }
     
+    function formatScheduleTime(cronExpression) {
+        // Parse cron expression: minute hour day month weekday
+        const parts = cronExpression.split(' ');
+        if (parts.length !== 5) {
+            return cronExpression; // Fallback to showing cron if parsing fails
+        }
+        
+        const [minute, hour, , , dayOfWeek] = parts;
+        
+        // Convert to 12-hour format
+        const hourNum = parseInt(hour);
+        const minuteNum = parseInt(minute);
+        const ampm = hourNum >= 12 ? 'PM' : 'AM';
+        const displayHour = hourNum === 0 ? 12 : (hourNum > 12 ? hourNum - 12 : hourNum);
+        const timeStr = `${displayHour}:${minuteNum.toString().padStart(2, '0')} ${ampm}`;
+        
+        // Convert day-of-week to frequency
+        let frequency;
+        switch (dayOfWeek) {
+            case '*': frequency = 'Daily'; break;
+            case '1-5': frequency = 'Weekdays'; break;
+            case '0,6': frequency = 'Weekends'; break;
+            case '1': frequency = 'Mondays'; break;
+            case '2': frequency = 'Tuesdays'; break;
+            case '3': frequency = 'Wednesdays'; break;
+            case '4': frequency = 'Thursdays'; break;
+            case '5': frequency = 'Fridays'; break;
+            case '6': frequency = 'Saturdays'; break;
+            case '0': frequency = 'Sundays'; break;
+            default: frequency = 'Custom';
+        }
+        
+        return `${timeStr}<br><small class="text-muted">${frequency}</small>`;
+    }
+
     function formatNextRun(nextRunTime, isActive) {
         if (!isActive) {
             return '<span class="text-muted">Inactive</span>';
@@ -339,7 +371,16 @@ document.addEventListener('DOMContentLoaded', function() {
             return '<span class="text-muted">Not scheduled</span>';
         }
         
-        const nextRun = new Date(nextRunTime);
+        // Parse the datetime and ensure it's treated as local time
+        let nextRun;
+        if (nextRunTime.endsWith('Z') || nextRunTime.includes('+')) {
+            // If it's UTC or has timezone info, parse as-is
+            nextRun = new Date(nextRunTime);
+        } else {
+            // If no timezone info, treat as local time
+            nextRun = new Date(nextRunTime + (nextRunTime.includes('T') ? '' : 'T00:00:00'));
+        }
+        
         const now = new Date();
         const diffMinutes = (nextRun - now) / (1000 * 60);
         
@@ -350,7 +391,45 @@ document.addEventListener('DOMContentLoaded', function() {
             className = 'next-run-soon';
         }
         
-        return `<span class="${className}">${nextRun.toLocaleString()}</span>`;
+        // Format in local timezone
+        const options = {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        };
+        
+        return `<span class="${className}">${nextRun.toLocaleString('en-US', options)}</span>`;
+    }
+
+    function formatLastRun(lastRunTime) {
+        if (!lastRunTime) {
+            return 'Never';
+        }
+        
+        // Parse the datetime and ensure it's treated as local time
+        let lastRun;
+        if (lastRunTime.endsWith('Z') || lastRunTime.includes('+')) {
+            // If it's UTC or has timezone info, parse as-is
+            lastRun = new Date(lastRunTime);
+        } else {
+            // If no timezone info, treat as local time
+            lastRun = new Date(lastRunTime + (lastRunTime.includes('T') ? '' : 'T00:00:00'));
+        }
+        
+        // Format in local timezone
+        const options = {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        };
+        
+        return lastRun.toLocaleString('en-US', options);
     }
     
     function applyFilters() {
@@ -447,24 +526,58 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     };
     
-    window.deleteSchedule = function(scheduleId, streamName) {
-        if (!confirm(`Are you sure you want to delete the schedule for "${streamName}"? This action cannot be undone.`)) {
-            return;
-        }
-        
-        fetch(`/api/schedules/${scheduleId}`, { method: 'DELETE' })
+    window.deleteSchedule = function(scheduleId, streamName, buttonElement) {
+        try {
+            console.log('deleteSchedule called with:', scheduleId, streamName);
+            
+            if (!confirm(`Are you sure you want to delete the schedule for "${streamName}"? This action cannot be undone.`)) {
+                console.log('User cancelled deletion');
+                return;
+            }
+            
+            console.log('Proceeding with deletion for schedule:', scheduleId);
+            
+            // Show loading state
+            if (buttonElement) {
+                buttonElement.disabled = true;
+                buttonElement.innerHTML = '<span class="spinner"></span> Deleting...';
+            }
+            
+            fetch(`/api/schedules/${scheduleId}`, { 
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
             .then(response => {
+                console.log('Delete response status:', response.status);
                 if (response.ok) {
-                    AudioRecorder.showAlert(`Schedule for "${streamName}" deleted successfully`, 'success');
+                    console.log('Delete successful');
+                    alert(`Schedule for "${streamName}" deleted successfully`);
                     loadSchedules(); // Reload the schedules list
                 } else {
-                    return response.json().then(err => Promise.reject(err));
+                    console.log('Delete failed with status:', response.status);
+                    return response.text().then(text => {
+                        console.log('Error response text:', text);
+                        throw new Error(`Failed to delete schedule: ${text}`);
+                    });
                 }
             })
             .catch(error => {
                 console.error('Delete error:', error);
-                AudioRecorder.showAlert(error.message || 'Failed to delete schedule', 'danger');
+                alert(`Error deleting schedule: ${error.message}`);
+            })
+            .finally(() => {
+                // Reset button state
+                if (buttonElement) {
+                    buttonElement.disabled = false;
+                    buttonElement.innerHTML = 'Delete';
+                }
             });
+        } catch (error) {
+            console.error('Unexpected error in deleteSchedule:', error);
+            alert(`Unexpected error: ${error.message}`);
+        }
     };
     
     window.showCronHelper = showCronHelper;

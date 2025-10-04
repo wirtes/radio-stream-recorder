@@ -123,17 +123,17 @@ class WorkflowCoordinator:
                 output_directory=config.RECORDINGS_DIR
             )
             
-            # Set completion callback
-            recording_manager.set_completion_callback(
-                lambda session_id, success, output_file: self._handle_recording_completion(
-                    session_id, success, output_file
+            # Set status callback to handle workflow stage changes
+            recording_manager.set_status_callback(
+                lambda stage, data: self._handle_recording_status_change(
+                    session_id, stage, data
                 )
             )
             
             # Set progress callback for real-time updates
             recording_manager.set_progress_callback(
-                lambda session_id, stage, progress: self._handle_recording_progress(
-                    session_id, stage, progress
+                lambda message, progress: self._handle_recording_progress(
+                    session_id, message, progress
                 )
             )
             
@@ -151,16 +151,32 @@ class WorkflowCoordinator:
             
             # Update session status to failed
             try:
-                session = self.session_repo.get_by_id(session_id)
-                if session:
-                    session.status = RecordingStatus.FAILED
-                    session.error_message = str(e)
-                    session.end_time = datetime.now()
-                    self.session_repo.update(session)
+                self.session_repo.update_status(session_id, RecordingStatus.FAILED, str(e))
             except Exception as update_error:
                 self.logger.error(f"Failed to update session status: {update_error}")
             
             raise
+    
+    def _handle_recording_status_change(self, session_id: int, stage: str, data: Dict[str, Any]):
+        """
+        Handle recording workflow stage changes.
+        
+        Args:
+            session_id: Session ID
+            stage: Current workflow stage
+            data: Additional stage data
+        """
+        try:
+            self.logger.info(f"Recording session {session_id} stage changed to: {stage}")
+            
+            # Handle completion
+            if stage == "completed":
+                self._handle_recording_completion(session_id, True, data.get('output_file'))
+            elif stage == "failed":
+                self._handle_recording_completion(session_id, False, None)
+            
+        except Exception as e:
+            self.logger.error(f"Error handling status change for session {session_id}: {e}")
     
     def _handle_recording_completion(
         self, 
@@ -186,7 +202,8 @@ class WorkflowCoordinator:
             # Update session in database
             session = self.session_repo.get_by_id(session_id)
             if session:
-                session.end_time = datetime.now()
+                from ..utils.timezone_utils import get_local_now
+                session.end_time = get_local_now()
                 
                 if success and output_file:
                     session.status = RecordingStatus.COMPLETED
@@ -228,14 +245,14 @@ class WorkflowCoordinator:
         except Exception as e:
             self.logger.error(f"Error handling recording completion for session {session_id}: {e}")
     
-    def _handle_recording_progress(self, session_id: int, stage: str, progress: Dict[str, Any]):
+    def _handle_recording_progress(self, session_id: int, message: str, progress: float):
         """
         Handle recording progress updates.
         
         Args:
             session_id: Session ID
-            stage: Current workflow stage
-            progress: Progress information
+            message: Progress message
+            progress: Progress percentage (0-100)
         """
         try:
             # Log progress for monitoring
@@ -243,11 +260,11 @@ class WorkflowCoordinator:
                 from .logging_service import OperationType, LogLevel
                 self.logging_service.log_operation(
                     OperationType.RECORDING,
-                    f"Recording session {session_id} progress update",
+                    f"Recording session {session_id} progress update: {message}",
                     LogLevel.DEBUG,
                     context={
                         'session_id': session_id,
-                        'stage': stage,
+                        'message': message,
                         'progress': progress
                     }
                 )
@@ -386,7 +403,8 @@ class WorkflowCoordinator:
         Called periodically to maintain configuration backups.
         """
         try:
-            current_time = datetime.utcnow()
+            from ..utils.timezone_utils import get_local_now
+            current_time = get_local_now()
             
             # Check if backup is needed
             if (self._last_backup_time is None or 

@@ -49,7 +49,8 @@ class BackupService:
             Dictionary with backup information
         """
         try:
-            timestamp = datetime.utcnow()
+            from ..utils.timezone_utils import get_local_now
+            timestamp = get_local_now()
             if not backup_name:
                 backup_name = f"backup_{timestamp.strftime('%Y%m%d_%H%M%S')}"
             
@@ -167,9 +168,10 @@ class BackupService:
                     'error': f"Backup file not found: {backup_filename}"
                 }
             
+            from ..utils.timezone_utils import get_local_now
             restore_info = {
                 'backup_filename': backup_filename,
-                'restored_at': datetime.utcnow().isoformat(),
+                'restored_at': get_local_now().isoformat(),
                 'streams_restored': 0,
                 'schedules_restored': 0,
                 'streams_skipped': 0,
@@ -387,10 +389,11 @@ class BackupService:
             os.remove(backup_path)
             
             logger.info(f"Backup deleted: {backup_filename}")
+            from ..utils.timezone_utils import get_local_now
             return {
                 'success': True,
                 'backup_filename': backup_filename,
-                'deleted_at': datetime.utcnow().isoformat()
+                'deleted_at': get_local_now().isoformat()
             }
             
         except Exception as e:
@@ -513,7 +516,8 @@ class BackupService:
             self.cleanup_old_backups()
             
             # Create new automatic backup
-            backup_name = f"auto_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            from ..utils.timezone_utils import get_local_timestamp_string
+            backup_name = f"auto_backup_{get_local_timestamp_string()}"
             return self.create_backup(backup_name, include_artwork=True)
             
         except Exception as e:

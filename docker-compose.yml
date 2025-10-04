@@ -11,6 +11,9 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./artwork:/app/artwork
+      # Mount timezone information from host
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
       
       # Alternative: Use named volumes for better Docker integration
       # - audio_recorder_data:/app/data
@@ -37,8 +40,8 @@ services:
       # Database configuration
       - DATABASE_URL=sqlite:////app/data/audio_recorder.db
       
-      # Optional timezone configuration
-      - TZ=${TZ:-UTC}
+      # Use local timezone from mounted files
+      - TZ=US/Mountain
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8666/health"]

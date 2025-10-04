@@ -39,20 +39,31 @@ Edit Schedule - Audio Stream Recorder
                     </div>
                     
                     <div class="form-group">
-                        <label for="cron_expression" class="form-label">Schedule (Cron Expression) *</label>
-                        <div class="input-group">
-                            <input type="text" id="cron_expression" name="cron_expression" class="form-control" 
-                                   placeholder="0 9 * * 1-5" required>
-                            <button type="button" id="cron-helper-btn" class="btn btn-outline-primary">Help</button>
-                            <button type="button" id="validate-cron-btn" class="btn btn-outline-secondary">Validate</button>
+                        <label for="schedule_time" class="form-label">Recording Time *</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <input type="time" id="schedule_time" name="schedule_time" class="form-control" required>
+                                <small class="form-text text-muted">Time in 24-hour format (local time)</small>
+                            </div>
+                            <div class="col-md-6">
+                                <select id="schedule_frequency" name="schedule_frequency" class="form-control" required>
+                                    <option value="daily">Daily</option>
+                                    <option value="weekdays">Weekdays (Mon-Fri)</option>
+                                    <option value="weekends">Weekends (Sat-Sun)</option>
+                                    <option value="monday">Mondays</option>
+                                    <option value="tuesday">Tuesdays</option>
+                                    <option value="wednesday">Wednesdays</option>
+                                    <option value="thursday">Thursdays</option>
+                                    <option value="friday">Fridays</option>
+                                    <option value="saturday">Saturdays</option>
+                                    <option value="sunday">Sundays</option>
+                                </select>
+                                <small class="form-text text-muted">How often to record</small>
+                            </div>
                         </div>
                         <div class="invalid-feedback"></div>
-                        <small class="form-text text-muted">
-                            Format: minute hour day month weekday (e.g., "0 9 * * 1-5" for weekdays at 9 AM)
-                        </small>
                     </div>
-                    
-                    <div id="cron-validation-result" class="mt-2" style="display: none;"></div>
+
                     
                     <div class="row">
                         <div class="col-md-6">
@@ -113,32 +124,24 @@ Edit Schedule - Audio Stream Recorder
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Cron Expression Guide</h5>
+                <h5 class="mb-0">Schedule Guide</h5>
             </div>
             <div class="card-body">
-                <p class="small">Cron expressions have 5 fields:</p>
-                <code class="small">minute hour day month weekday</code>
+                <p class="small">Choose when to record your stream:</p>
                 
-                <h6 class="mt-3">Common Examples:</h6>
+                <h6 class="mt-3">Time Format:</h6>
+                <p class="small">Use 24-hour format (e.g., 14:30 for 2:30 PM)</p>
+                
+                <h6 class="mt-3">Frequency Options:</h6>
                 <ul class="small">
-                    <li><code>0 9 * * *</code><br>Daily at 9:00 AM</li>
-                    <li><code>0 9 * * 1-5</code><br>Weekdays at 9:00 AM</li>
-                    <li><code>0 20 * * 0</code><br>Sundays at 8:00 PM</li>
-                    <li><code>30 14 * * 6</code><br>Saturdays at 2:30 PM</li>
-                    <li><code>0 */2 * * *</code><br>Every 2 hours</li>
-                    <li><code>0 0 1 * *</code><br>First day of each month</li>
+                    <li><strong>Daily:</strong> Every day at the specified time</li>
+                    <li><strong>Weekdays:</strong> Monday through Friday</li>
+                    <li><strong>Weekends:</strong> Saturday and Sunday</li>
+                    <li><strong>Specific Days:</strong> Choose a particular day of the week</li>
                 </ul>
                 
-                <h6 class="mt-3">Special Characters:</h6>
-                <ul class="small">
-                    <li><code>*</code> - Any value</li>
-                    <li><code>,</code> - List separator</li>
-                    <li><code>-</code> - Range</li>
-                    <li><code>/</code> - Step values</li>
-                </ul>
-                
-                <h6 class="mt-3">Weekdays:</h6>
-                <p class="small">0=Sunday, 1=Monday, ..., 6=Saturday</p>
+                <h6 class="mt-3">Time Zone:</h6>
+                <p class="small">All times are in your local time zone (Mountain Time)</p>
             </div>
         </div>
         
@@ -173,44 +176,7 @@ Edit Schedule - Audio Stream Recorder
     </div>
 </div>
 
-<!-- Cron Helper Modal -->
-<div id="cron-helper-modal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 700px;">
-        <div class="modal-header">
-            <h5>Cron Expression Builder</h5>
-            <button class="modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <h6>Quick Presets:</h6>
-                    <div class="preset-buttons">
-                        <button class="btn btn-sm btn-outline-primary mb-1" onclick="setCronPreset('0 9 * * 1-5')">Weekdays 9 AM</button>
-                        <button class="btn btn-sm btn-outline-primary mb-1" onclick="setCronPreset('0 20 * * 0')">Sundays 8 PM</button>
-                        <button class="btn btn-sm btn-outline-primary mb-1" onclick="setCronPreset('0 14 * * 6')">Saturdays 2 PM</button>
-                        <button class="btn btn-sm btn-outline-primary mb-1" onclick="setCronPreset('0 */6 * * *')">Every 6 hours</button>
-                        <button class="btn btn-sm btn-outline-primary mb-1" onclick="setCronPreset('0 0 * * *')">Daily midnight</button>
-                        <button class="btn btn-sm btn-outline-primary mb-1" onclick="setCronPreset('0 12 * * *')">Daily noon</button>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label for="modal-cron-input" class="form-label">Cron Expression</label>
-                        <input type="text" id="modal-cron-input" class="form-control" placeholder="0 9 * * 1-5">
-                    </div>
-                    
-                    <button id="modal-validate-cron" class="btn btn-primary">Validate</button>
-                    
-                    <div id="modal-cron-result" class="mt-3" style="display: none;"></div>
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button id="use-cron-expression" class="btn btn-primary">Use This Expression</button>
-            <button id="modal-cron-close" class="btn btn-secondary">Close</button>
-        </div>
-    </div>
-</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -228,14 +194,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Event listeners
     form.addEventListener('submit', handleSubmit);
-    document.getElementById('validate-cron-btn').addEventListener('click', validateCronExpression);
-    document.getElementById('cron-helper-btn').addEventListener('click', showCronHelper);
-    
-    // Modal event listeners
-    document.getElementById('modal-validate-cron').addEventListener('click', validateModalCron);
-    document.getElementById('use-cron-expression').addEventListener('click', useCronExpression);
-    document.getElementById('modal-cron-close').addEventListener('click', hideCronHelper);
-    document.querySelector('.modal-close').addEventListener('click', hideCronHelper);
     
     function loadStreams() {
         fetch('/api/streams')
@@ -267,7 +225,11 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(data => {
                 // Populate form fields
                 document.getElementById('stream_config_id').value = data.stream_config_id;
-                document.getElementById('cron_expression').value = data.cron_expression;
+                
+                // Convert cron expression back to time and frequency
+                const timeAndFreq = convertFromCron(data.cron_expression);
+                document.getElementById('schedule_time').value = timeAndFreq.time;
+                document.getElementById('schedule_frequency').value = timeAndFreq.frequency;
                 
                 // Convert minutes to hours and minutes
                 const totalMinutes = data.duration_minutes;
@@ -330,10 +292,23 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Convert time and frequency to cron expression
+        const scheduleTime = document.getElementById('schedule_time').value;
+        const frequency = document.getElementById('schedule_frequency').value;
+        
+        if (!scheduleTime) {
+            AudioRecorder.showAlert('Please select a recording time', 'danger');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = mode === 'create' ? 'Create Recording Schedule' : 'Update Recording Schedule';
+            return;
+        }
+        
+        const cronExpression = convertToCron(scheduleTime, frequency);
+        
         const formData = new FormData(form);
         const scheduleData = {
             stream_config_id: parseInt(formData.get('stream_config_id')),
-            cron_expression: formData.get('cron_expression'),
+            cron_expression: cronExpression,
             duration_minutes: totalMinutes,
             max_retries: parseInt(formData.get('max_retries')),
             is_active: formData.get('is_active') === 'on'
@@ -379,126 +354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    function validateCronExpression() {
-        const cronInput = document.getElementById('cron_expression');
-        const cronExpression = cronInput.value.trim();
-        
-        if (!cronExpression) {
-            AudioRecorder.showAlert('Please enter a cron expression first', 'warning');
-            return;
-        }
-        
-        fetch('/api/schedules/validate-cron', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ cron_expression: cronExpression })
-        })
-        .then(response => response.json())
-        .then(data => {
-            const resultDiv = document.getElementById('cron-validation-result');
-            
-            if (data.valid) {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-success">
-                        <strong>Valid cron expression!</strong><br>
-                        <strong>Description:</strong> ${data.description}<br>
-                        <strong>Next run:</strong> ${new Date(data.next_run_time).toLocaleString()}
-                    </div>
-                `;
-                cronInput.classList.remove('is-invalid');
-                cronInput.classList.add('is-valid');
-            } else {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-danger">
-                        <strong>Invalid cron expression:</strong> ${data.error}
-                    </div>
-                `;
-                cronInput.classList.remove('is-valid');
-                cronInput.classList.add('is-invalid');
-            }
-            
-            resultDiv.style.display = 'block';
-        })
-        .catch(error => {
-            console.error('Cron validation error:', error);
-            AudioRecorder.showAlert('Failed to validate cron expression', 'danger');
-        });
-    }
-    
-    function showCronHelper() {
-        const currentCron = document.getElementById('cron_expression').value;
-        document.getElementById('modal-cron-input').value = currentCron;
-        document.getElementById('modal-cron-result').style.display = 'none';
-        document.getElementById('cron-helper-modal').style.display = 'block';
-    }
-    
-    function hideCronHelper() {
-        document.getElementById('cron-helper-modal').style.display = 'none';
-    }
-    
-    function validateModalCron() {
-        const cronInput = document.getElementById('modal-cron-input');
-        const cronExpression = cronInput.value.trim();
-        
-        if (!cronExpression) {
-            AudioRecorder.showAlert('Please enter a cron expression', 'warning');
-            return;
-        }
-        
-        fetch('/api/schedules/validate-cron', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ cron_expression: cronExpression })
-        })
-        .then(response => response.json())
-        .then(data => {
-            const resultDiv = document.getElementById('modal-cron-result');
-            
-            if (data.valid) {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-success">
-                        <strong>Description:</strong> ${data.description}<br>
-                        <strong>Next 3 runs:</strong>
-                        <ul class="mb-0">
-                            ${data.next_runs.slice(0, 3).map(run => 
-                                `<li>${new Date(run).toLocaleString()}</li>`
-                            ).join('')}
-                        </ul>
-                    </div>
-                `;
-            } else {
-                resultDiv.innerHTML = `
-                    <div class="alert alert-danger">
-                        <strong>Error:</strong> ${data.error}
-                    </div>
-                `;
-            }
-            
-            resultDiv.style.display = 'block';
-        })
-        .catch(error => {
-            console.error('Cron validation error:', error);
-            AudioRecorder.showAlert('Failed to validate cron expression', 'danger');
-        });
-    }
-    
-    function useCronExpression() {
-        const modalCron = document.getElementById('modal-cron-input').value;
-        document.getElementById('cron_expression').value = modalCron;
-        hideCronHelper();
-        
-        // Validate the expression in the main form
-        validateCronExpression();
-    }
-    
-    window.setCronPreset = function(cronExpression) {
-        document.getElementById('modal-cron-input').value = cronExpression;
-        validateModalCron();
-    };
+
     
     function showValidationErrors(errors) {
         errors.forEach(error => {
@@ -523,6 +379,61 @@ document.addEventListener('DOMContentLoaded', function() {
         feedbacks.forEach(feedback => {
             feedback.textContent = '';
         });
+    }
+    
+    function convertToCron(timeString, frequency) {
+        // Parse time (HH:MM format)
+        const [hours, minutes] = timeString.split(':').map(num => parseInt(num));
+        
+        // Convert frequency to cron day-of-week
+        let dayOfWeek;
+        switch (frequency) {
+            case 'daily': dayOfWeek = '*'; break;
+            case 'weekdays': dayOfWeek = '1-5'; break;
+            case 'weekends': dayOfWeek = '0,6'; break;
+            case 'monday': dayOfWeek = '1'; break;
+            case 'tuesday': dayOfWeek = '2'; break;
+            case 'wednesday': dayOfWeek = '3'; break;
+            case 'thursday': dayOfWeek = '4'; break;
+            case 'friday': dayOfWeek = '5'; break;
+            case 'saturday': dayOfWeek = '6'; break;
+            case 'sunday': dayOfWeek = '0'; break;
+            default: dayOfWeek = '*';
+        }
+        
+        // Return cron expression: minute hour day month weekday
+        return `${minutes} ${hours} * * ${dayOfWeek}`;
+    }
+    
+    function convertFromCron(cronExpression) {
+        // Parse cron expression: minute hour day month weekday
+        const parts = cronExpression.split(' ');
+        if (parts.length !== 5) {
+            return { time: '09:00', frequency: 'daily' };
+        }
+        
+        const [minute, hour, , , dayOfWeek] = parts;
+        
+        // Format time as HH:MM
+        const timeString = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+        
+        // Convert day-of-week to frequency
+        let frequency;
+        switch (dayOfWeek) {
+            case '*': frequency = 'daily'; break;
+            case '1-5': frequency = 'weekdays'; break;
+            case '0,6': frequency = 'weekends'; break;
+            case '1': frequency = 'monday'; break;
+            case '2': frequency = 'tuesday'; break;
+            case '3': frequency = 'wednesday'; break;
+            case '4': frequency = 'thursday'; break;
+            case '5': frequency = 'friday'; break;
+            case '6': frequency = 'saturday'; break;
+            case '0': frequency = 'sunday'; break;
+            default: frequency = 'daily';
+        }
+        
+        return { time: timeString, frequency: frequency };
     }
 });
 </script>

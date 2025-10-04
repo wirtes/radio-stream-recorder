@@ -90,11 +90,19 @@ class RecordingSchedule(Base):
     
     def calculate_next_run_time(self, base_time: Optional[datetime] = None) -> datetime:
         """Calculate the next run time based on cron expression."""
+        from ..utils.timezone_utils import get_local_now, localize_datetime
+        
         if base_time is None:
-            base_time = datetime.now()
+            base_time = get_local_now()
         
         cron = croniter(self.cron_expression, base_time)
-        return cron.get_next(datetime)
+        next_run = cron.get_next(datetime)
+        
+        # Ensure the returned datetime is timezone-aware
+        if next_run.tzinfo is None:
+            next_run = localize_datetime(next_run)
+        
+        return next_run
     
     def update_next_run_time(self):
         """Update the next_run_time field based on current time."""

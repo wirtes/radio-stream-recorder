@@ -153,7 +153,9 @@ class RecordingSessionManager:
     
     def _generate_file_paths(self) -> None:
         """Generate file paths for recording and processing."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        from ..utils.timezone_utils import get_local_timestamp_string, get_local_date_string
+        
+        timestamp = get_local_timestamp_string()
         base_filename = f"{self.stream_config.name}_{timestamp}"
         
         # Raw recording path (temporary)
@@ -165,7 +167,7 @@ class RecordingSessionManager:
         # Final processed MP3 path
         filename_pattern = self.stream_config.output_filename_pattern
         final_filename = filename_pattern.format(
-            date=datetime.now().strftime("%Y-%m-%d"),
+            date=get_local_date_string(),
             name=self.stream_config.name,
             timestamp=timestamp
         )
@@ -178,7 +180,8 @@ class RecordingSessionManager:
     def _run_workflow(self) -> None:
         """Run the complete recording workflow."""
         try:
-            self.start_time = datetime.now()
+            from ..utils.timezone_utils import get_local_now
+            self.start_time = get_local_now()
             
             # Stage 1: Recording
             if not self._execute_recording_stage():
@@ -203,7 +206,8 @@ class RecordingSessionManager:
                 return
             
             # Workflow completed successfully
-            self.end_time = datetime.now()
+            from ..utils.timezone_utils import get_local_now
+            self.end_time = get_local_now()
             self._update_status(WorkflowStage.COMPLETED)
             
             # Cleanup temporary files
@@ -232,8 +236,14 @@ class RecordingSessionManager:
                 if status == StreamRecordingStatus.RECORDING:
                     # Update progress based on time elapsed
                     if self.duration_minutes and data.get('start_time'):
-                        start_time = datetime.fromisoformat(data['start_time'])
-                        elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
+                        start_time_data = data['start_time']
+                        if isinstance(start_time_data, str):
+                            start_time = datetime.fromisoformat(start_time_data)
+                        else:
+                            start_time = start_time_data  # Already a datetime object
+                        
+                        from ..utils.timezone_utils import get_local_now
+                        elapsed_minutes = (get_local_now() - start_time).total_seconds() / 60
                         progress = min(elapsed_minutes / self.duration_minutes, 1.0)
                         self._update_progress("Recording audio stream", progress * 100)
             
@@ -312,25 +322,40 @@ class RecordingSessionManager:
             return False
     
     def _execute_transfer_stage(self) -> bool:
-        """Execute the file transfer stage (placeholder for now)."""
+        """Execute the file transfer stage using SCP."""
         self._update_status(WorkflowStage.TRANSFERRING)
         self._update_progress("Transferring file", 0.0)
         
         try:
-            # TODO: Implement SCP transfer in task 4
-            # For now, just simulate transfer
             self.logger.info(f"Transfer stage - file ready: {self.processed_mp3_path}")
             self.logger.info(f"SCP destination: {self.stream_config.scp_destination}")
             
-            # Simulate transfer progress
-            for i in range(0, 101, 20):
-                if self.stop_event.is_set():
-                    return False
-                self._update_progress("Transferring file", i)
-                time.sleep(0.1)  # Simulate transfer time
+            # Import SCP transfer service
+            from .scp_transfer_service import SCPTransferService
+            scp_service = SCPTransferService()
             
-            self.logger.info("Transfer stage completed (placeholder)")
-            return True
+            # Progress callback for transfer updates
+            def progress_callback(transferred: int, total: int):
+                if total > 0:
+                    progress = (transferred / total) * 100
+                    self._update_progress("Transferring file", progress)
+            
+            # Perform SCP transfer
+            result = scp_service.transfer_file(
+                local_path=self.processed_mp3_path,
+                scp_destination=self.stream_config.scp_destination,
+                progress_callback=progress_callback
+            )
+            
+            if result and result.success:
+                self.logger.info(f"Transfer completed successfully to {self.stream_config.scp_destination}")
+                self._update_progress("Transferring file", 100.0)
+                return True
+            else:
+                error_msg = result.error_message if result else "Unknown transfer error"
+                self.error_message = f"Transfer failed: {error_msg}"
+                self.logger.error(self.error_message)
+                return False
             
         except Exception as e:
             self.error_message = f"Transfer stage error: {str(e)}"
